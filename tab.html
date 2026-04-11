@@ -320,12 +320,38 @@
 
   /* -- Empty & Loading States ------------------------------------- */
   .empty-msg { text-align: center; color: var(--subtext0); padding: 32px; font-size: 13px; }
-  .skeleton { display: flex; flex-direction: column; gap: 2px; padding: 8px 0; }
+  .skeleton { display: flex; flex-direction: column; gap: 6px; padding: 12px 10px; }
+  .skeleton-section-title {
+    height: 10px; width: 40%; background: var(--surface1);
+    border-radius: 3px; margin: 14px 0 8px;
+    animation: shimmer 1.2s ease-in-out infinite alternate;
+  }
+  .skeleton-section-title:first-child { margin-top: 4px; }
   .skeleton-row {
-    height: 38px; background: var(--surface0); border-radius: var(--radius);
+    height: 34px; background: var(--surface0); border-radius: var(--radius);
     animation: shimmer 1.2s ease-in-out infinite alternate;
   }
   @keyframes shimmer { from { opacity: 0.5; } to { opacity: 1; } }
+  /* Middle-panel circular loader */
+  .middle-loader {
+    flex: 1; display: flex; align-items: center; justify-content: center;
+    padding: 40px; min-height: 320px;
+  }
+  .middle-loader .loader-stack { display: flex; flex-direction: column; align-items: center; }
+  .loader-ring {
+    width: 38px; height: 38px; border-radius: 50%;
+    border: 3px solid var(--surface1);
+    border-top-color: var(--accent);
+    animation: loader-spin 0.8s linear infinite;
+  }
+  .loader-label { margin-top: 14px; font-size: 12px; color: var(--subtext0); }
+  @keyframes loader-spin { to { transform: rotate(360deg); } }
+  /* Home skeleton grid (structural) */
+  .home-skeleton { padding: 24px; display: flex; flex-direction: column; gap: 20px; }
+  .home-skel-header { height: 28px; width: 220px; background: var(--surface0); border-radius: 4px; animation: shimmer 1.2s ease-in-out infinite alternate; }
+  .home-skel-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .home-skel-card { height: 86px; background: var(--surface0); border-radius: var(--radius); animation: shimmer 1.2s ease-in-out infinite alternate; }
+  .home-skel-preview { height: 260px; background: var(--surface0); border-radius: var(--radius); animation: shimmer 1.2s ease-in-out infinite alternate; margin-top: 8px; }
 
   /* -- Modal ------------------------------------------------------ */
   .modal-overlay {
@@ -630,13 +656,45 @@ async function init() {
   document.getElementById('setupScreen').style.display = 'none';
   document.getElementById('mainView').style.display = 'flex';
 
-  // Show sidebar skeleton while loading
-  document.getElementById('sidebar').innerHTML = '<div style="padding:12px;">' + skeletonHtml(8) + '</div>';
+  // Show sidebar skeleton while loading (with section groupings)
+  document.getElementById('sidebar').innerHTML = structuredSidebarSkeleton();
+
+  // Show circular loader in the middle panel while we fetch data
+  showMiddleLoader('Loading Sanity project...');
 
   // Load health data for sidebar counts
   await loadHealth();
   renderSidebar();
   selectSection({ kind: 'home', slug: 'home', label: 'Home' });
+}
+
+function structuredSidebarSkeleton() {
+  var s = '<div class="skeleton">';
+  s += '<div class="skeleton-section-title"></div>';
+  s += '<div class="skeleton-row"></div>';
+  s += '<div class="skeleton-section-title"></div>';
+  for (var i = 0; i < 3; i++) s += '<div class="skeleton-row"></div>';
+  s += '<div class="skeleton-section-title"></div>';
+  for (var j = 0; j < 2; j++) s += '<div class="skeleton-row"></div>';
+  s += '<div class="skeleton-section-title"></div>';
+  s += '<div class="skeleton-row"></div>';
+  s += '</div>';
+  return s;
+}
+
+function showMiddleLoader(msg) {
+  var hv = document.getElementById('homeView');
+  if (hv) {
+    hv.style.display = 'flex';
+    hv.innerHTML = '<div class="middle-loader"><div class="loader-stack">'
+      + '<div class="loader-ring"></div>'
+      + '<div class="loader-label">' + (msg || 'Loading...') + '</div>'
+      + '</div></div>';
+  }
+  var cc = document.getElementById('contentCol');
+  if (cc) cc.style.display = 'none';
+  var mv = document.getElementById('mainView');
+  if (mv) { mv.style.display = 'flex'; mv.classList.add('no-detail'); }
 }
 
 async function refresh() {
@@ -728,9 +786,18 @@ async function loadHealth() {
 }
 
 async function switchEnv(env) {
+  showMiddleLoader('Switching to ' + env + '...');
   await api('POST', '/env', { env: env });
   await loadHealth();
-  if (state.section && state.section.kind === 'home') renderHome();
+  if (state.section && state.section.kind === 'home') {
+    renderHome();
+  } else if (state.section) {
+    document.getElementById('homeView').style.display = 'none';
+    document.getElementById('contentCol').style.display = 'flex';
+    await loadSection();
+  } else {
+    renderHome();
+  }
 }
 
 function openStudio(docId) {

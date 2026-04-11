@@ -134,7 +134,7 @@
     <div style="font-size:10px;color:var(--overlay1);margin-top:2px;">URL to Sanity Studio (cloud or local). Adds an "Open in Studio" button for manual editing.</div>
   </div>
   <div class="form-btns">
-    <button class="btn primary" onclick="saveForm()">Save</button>
+    <button class="btn primary" onclick="saveForm()">Save and Restart</button>
     <button class="btn" onclick="hideForm()">Cancel</button>
   </div>
 </div>
@@ -264,6 +264,14 @@ async function saveForm() {
   hideForm();
   await loadProjects();
   notifyParent();
+  restartApp();
+}
+
+function restartApp() {
+  DevOpsPilot.toast('Restarting app...', 'info');
+  setTimeout(function() {
+    fetch('/api/restart-app', { method: 'POST' }).catch(function() {});
+  }, 500);
 }
 
 async function setActive(name) {
