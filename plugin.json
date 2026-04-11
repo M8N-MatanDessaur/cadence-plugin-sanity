@@ -1,7 +1,7 @@
 {
   "id": "sanity",
   "name": "Sanity",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Manage Sanity.io datasets, document types, and documents with AI-powered actions",
   "icon": "database",
   "tint": "242, 77, 52",

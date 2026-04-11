@@ -623,6 +623,10 @@ async function init() {
   }
   state.configured = true;
   document.getElementById('setupScreen').style.display = 'none';
+  document.getElementById('mainView').style.display = 'flex';
+
+  // Show sidebar skeleton while loading
+  document.getElementById('sidebar').innerHTML = '<div style="padding:12px;">' + skeletonHtml(8) + '</div>';
 
   // Load health data for sidebar counts
   await loadHealth();
