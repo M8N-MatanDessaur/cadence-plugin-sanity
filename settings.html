@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sanity Projects</title>
+<script src="/plugins/sdk/devops-pilot-sdk.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { padding: 0; margin: 0; font-family: var(--font-ui); color: var(--text); background: transparent; }
+  .section-desc { font-size: 11px; color: var(--subtext0); margin-bottom: 14px; }
+
+  /* -- Project list ----------------------------------------- */
+  .project-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+  .project-card {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px; background: var(--surface0);
+    border: 1px solid var(--surface1); border-radius: var(--radius, 6px);
+    transition: border-color 0.12s;
+  }
+  .project-card.active { border-color: var(--accent); }
+  .project-card .dot {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+    background: var(--surface1);
+  }
+  .project-card.active .dot { background: var(--green); }
+  .project-info { flex: 1; min-width: 0; }
+  .project-name { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .project-meta { font-size: 10px; color: var(--subtext0); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .project-actions { display: flex; gap: 4px; flex-shrink: 0; }
+  .project-actions button {
+    padding: 3px 8px; font-size: 10px; background: transparent;
+    border: 1px solid var(--surface1); border-radius: var(--radius, 6px);
+    color: var(--subtext1); cursor: pointer; font-family: var(--font-ui);
+  }
+  .project-actions button:hover { border-color: var(--accent); color: var(--text); }
+  .project-actions button.danger:hover { border-color: var(--red); color: var(--red); }
+
+  .empty-msg { font-size: 12px; color: var(--subtext0); padding: 12px 0; }
+
+  /* -- Add/Edit form ----------------------------------------- */
+  .form-area {
+    padding: 14px; background: var(--surface0);
+    border: 1px solid var(--surface1); border-radius: var(--radius, 6px);
+  }
+  .form-title { font-size: 12px; font-weight: 600; margin-bottom: 12px; }
+  .field { margin-bottom: 10px; }
+  .field label { display: block; font-size: 11px; color: var(--subtext0); margin-bottom: 3px; }
+  .field input {
+    width: 100%; padding: 6px 8px; background: var(--base);
+    border: 1px solid var(--surface1); border-radius: var(--radius, 6px);
+    color: var(--text); font: 12px var(--font-ui); outline: none;
+  }
+  .field input:focus { border-color: var(--accent); }
+  .field input::placeholder { color: var(--subtext0); }
+  .form-btns { display: flex; gap: 6px; margin-top: 14px; }
+  .btn {
+    padding: 6px 14px; font: 11px var(--font-ui); cursor: pointer;
+    border-radius: var(--radius, 6px); border: 1px solid var(--surface1);
+    background: var(--surface0); color: var(--text);
+  }
+  .btn:hover { border-color: var(--accent); }
+  .btn.primary { background: var(--accent); color: var(--crust); border-color: transparent; font-weight: 600; }
+  .btn.primary:hover { filter: brightness(1.1); }
+  .add-btn { margin-bottom: 16px; }
+  .pw-wrap { display: flex; gap: 0; }
+  .pw-wrap input { border-radius: var(--radius, 6px) 0 0 var(--radius, 6px); flex: 1; }
+  .pw-toggle {
+    background: var(--surface0); border: 1px solid var(--surface1); border-left: none;
+    border-radius: 0 var(--radius, 6px) var(--radius, 6px) 0; padding: 0 10px;
+    cursor: pointer; color: var(--subtext0); display: flex; align-items: center;
+  }
+  .pw-toggle:hover { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<div class="section-desc">
+  Manage the Sanity projects this plugin can connect to. The active project is used for all API operations and the dashboard tab.
+</div>
+
+<div class="project-list" id="projectList">
+  <div class="empty-msg">Loading...</div>
+</div>
+
+<button class="btn add-btn" id="addBtn" onclick="showForm()">+ Add Project</button>
+
+<div class="form-area" id="formArea" style="display:none;">
+  <div class="form-title" id="formTitle">Add Project</div>
+  <div class="field">
+    <label>Display Name</label>
+    <input id="fName" type="text" placeholder="My Sanity Project">
+  </div>
+  <div class="field">
+    <label>Project ID</label>
+    <input id="fProjectId" type="text" placeholder="abc123xyz">
+  </div>
+  <div class="field">
+    <label>Dataset</label>
+    <input id="fDataset" type="text" placeholder="production">
+  </div>
+  <div class="field">
+    <label>API Token</label>
+    <div class="pw-wrap">
+      <input id="fToken" type="password" placeholder="sk...">
+      <button type="button" class="pw-toggle" onclick="togglePw()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+      </button>
+    </div>
+  </div>
+  <div class="field">
+    <label>Preview URL <span style="font-weight:400;color:var(--overlay1);">(optional)</span></label>
+    <input id="fPreviewUrl" type="url" placeholder="https://mysite.com or http://localhost:3000">
+    <div style="font-size:10px;color:var(--overlay1);margin-top:2px;">The frontend URL for live preview. Slug is appended automatically (e.g. https://mysite.com + /about).</div>
+  </div>
+  <div class="field">
+    <label>Local Repo <span style="font-weight:400;color:var(--overlay1);">(optional)</span></label>
+    <select id="fRepoPath" style="width:100%;padding:6px 8px;background:var(--base);border:1px solid var(--surface1);border-radius:var(--radius,6px);color:var(--text);font:12px var(--font-ui);outline:none;">
+      <option value="">-- None --</option>
+    </select>
+    <div style="font-size:10px;color:var(--overlay1);margin-top:2px;">Select from repos configured in DevOps Pilot. Enables AI to read schemas, generate components, and work on the codebase. Also sets the active repo in the dashboard.</div>
+  </div>
+  <div class="field">
+    <label>Studio URL <span style="font-weight:400;color:var(--overlay1);">(optional)</span></label>
+    <input id="fStudioUrl" type="url" placeholder="https://my-project.sanity.studio or http://localhost:3333">
+    <div style="font-size:10px;color:var(--overlay1);margin-top:2px;">URL to Sanity Studio (cloud or local). Adds an "Open in Studio" button for manual editing.</div>
+  </div>
+  <div class="form-btns">
+    <button class="btn primary" onclick="saveForm()">Save</button>
+    <button class="btn" onclick="hideForm()">Cancel</button>
+  </div>
+</div>
+
+<script>
+var API = '/api/plugins/sanity';
+var projects = [];
+var activeProject = '';
+var editingName = null; // null = add mode, string = editing existing
+var availableRepos = {}; // { name: path }
+
+function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+async function loadProjects() {
+  try {
+    var r = await fetch(API + '/projects');
+    var data = await r.json();
+    projects = data.projects || [];
+    activeProject = data.activeProject || '';
+  } catch (_) {
+    projects = [];
+    activeProject = '';
+  }
+  // Also load available repos from DevOps Pilot
+  try {
+    var rr = await fetch('/api/repos');
+    availableRepos = await rr.json();
+  } catch (_) {
+    availableRepos = {};
+  }
+  render();
+}
+
+function render() {
+  var el = document.getElementById('projectList');
+  if (!projects.length) {
+    el.innerHTML = '<div class="empty-msg">No projects configured. Click "+ Add Project" to get started.</div>';
+    return;
+  }
+  el.innerHTML = projects.map(function(p) {
+    var isActive = p.name === activeProject;
+    var metaLine = esc(p.projectId) + ' / ' + esc(p.dataset);
+    if (p.previewUrl) metaLine += ' - ' + esc(p.previewUrl);
+    return '<div class="project-card' + (isActive ? ' active' : '') + '">'
+      + '<div class="dot"></div>'
+      + '<div class="project-info">'
+      + '<div class="project-name">' + esc(p.name) + '</div>'
+      + '<div class="project-meta">' + metaLine + '</div>'
+      + '</div>'
+      + '<div class="project-actions">'
+      + (isActive ? '' : '<button onclick="setActive(\'' + esc(p.name).replace(/'/g, "\\'") + '\')">Set Active</button>')
+      + '<button onclick="editProject(\'' + esc(p.name).replace(/'/g, "\\'") + '\')">Edit</button>'
+      + '<button class="danger" onclick="removeProject(\'' + esc(p.name).replace(/'/g, "\\'") + '\')">Remove</button>'
+      + '</div></div>';
+  }).join('');
+}
+
+function showForm(proj) {
+  editingName = proj ? proj.name : null;
+  document.getElementById('formTitle').textContent = proj ? 'Edit Project' : 'Add Project';
+  document.getElementById('fName').value = proj ? proj.name : '';
+  document.getElementById('fProjectId').value = proj ? proj.projectId : '';
+  document.getElementById('fDataset').value = proj ? proj.dataset : '';
+  document.getElementById('fPreviewUrl').value = proj ? (proj.previewUrl || '') : '';
+  // Populate repo dropdown
+  var repoSelect = document.getElementById('fRepoPath');
+  var currentRepo = proj ? (proj.repoPath || '') : '';
+  repoSelect.innerHTML = '<option value="">-- None --</option>';
+  for (var repoName in availableRepos) {
+    var repoPath = availableRepos[repoName].replace(/\\\\/g, '/').replace(/\\/g, '/');
+    var selected = (repoPath === currentRepo.replace(/\\\\/g, '/').replace(/\\/g, '/')) ? ' selected' : '';
+    repoSelect.innerHTML += '<option value="' + esc(repoPath) + '"' + selected + '>' + esc(repoName) + '</option>';
+  }
+  document.getElementById('fStudioUrl').value = proj ? (proj.studioUrl || '') : '';
+  document.getElementById('fToken').value = '';
+  if (proj) document.getElementById('fToken').placeholder = '(unchanged)';
+  else document.getElementById('fToken').placeholder = 'sk...';
+  document.getElementById('formArea').style.display = '';
+  document.getElementById('addBtn').style.display = 'none';
+  document.getElementById('fName').focus();
+}
+
+function hideForm() {
+  document.getElementById('formArea').style.display = 'none';
+  document.getElementById('addBtn').style.display = '';
+  editingName = null;
+}
+
+async function saveForm() {
+  var name = document.getElementById('fName').value.trim();
+  var projectId = document.getElementById('fProjectId').value.trim();
+  var dataset = document.getElementById('fDataset').value.trim();
+  var apiToken = document.getElementById('fToken').value;
+  var previewUrl = document.getElementById('fPreviewUrl').value.trim().replace(/\/+$/, '');
+  var repoPath = document.getElementById('fRepoPath').value.trim().replace(/\/+$/, '');
+  var studioUrl = document.getElementById('fStudioUrl').value.trim().replace(/\/+$/, '');
+
+  if (!name || !projectId || !dataset) {
+    DevOpsPilot.toast('Name, Project ID, and Dataset are required.', 'error');
+    return;
+  }
+
+  if (editingName) {
+    var body = { name: name, projectId: projectId, dataset: dataset, previewUrl: previewUrl, repoPath: repoPath, studioUrl: studioUrl };
+    if (apiToken) body.apiToken = apiToken;
+    var r = await fetch(API + '/projects/' + encodeURIComponent(editingName), {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+    var data = await r.json();
+    if (data.error) { DevOpsPilot.toast(data.error, 'error'); return; }
+    DevOpsPilot.toast('Project updated.', 'success');
+  } else {
+    if (!apiToken) { DevOpsPilot.toast('API Token is required for new projects.', 'error'); return; }
+    var r = await fetch(API + '/projects', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name, projectId: projectId, dataset: dataset, apiToken: apiToken, previewUrl: previewUrl, repoPath: repoPath, studioUrl: studioUrl }),
+    });
+    var data = await r.json();
+    if (data.error) { DevOpsPilot.toast(data.error, 'error'); return; }
+    DevOpsPilot.toast('Project added.', 'success');
+  }
+
+  hideForm();
+  await loadProjects();
+  notifyParent();
+}
+
+async function setActive(name) {
+  await fetch(API + '/projects/active', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: name }),
+  });
+  // Also set active repo in DevOps Pilot if this project has one
+  var proj = projects.find(function(p) { return p.name === name; });
+  if (proj && proj.repoPath) {
+    var repoName = findRepoName(proj.repoPath);
+    if (repoName) {
+      try {
+        await fetch('/api/ui/context', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ activeRepo: repoName }),
+        });
+      } catch (_) {}
+    }
+  }
+  await loadProjects();
+  notifyParent();
+  DevOpsPilot.toast('Switched to ' + name, 'success');
+}
+
+function findRepoName(repoPath) {
+  if (!repoPath) return null;
+  var normalized = repoPath.replace(/\\\\/g, '/').replace(/\\/g, '/').replace(/\/+$/, '');
+  for (var name in availableRepos) {
+    var p = availableRepos[name].replace(/\\\\/g, '/').replace(/\\/g, '/').replace(/\/+$/, '');
+    if (p === normalized) return name;
+  }
+  return null;
+}
+
+function editProject(name) {
+  var p = projects.find(function(x) { return x.name === name; });
+  if (p) showForm(p);
+}
+
+var pendingRemove = null;
+async function removeProject(name) {
+  pendingRemove = name;
+  var el = document.getElementById('projectList');
+  var cards = el.querySelectorAll('.project-card');
+  cards.forEach(function(card) {
+    var cardName = card.querySelector('.project-name').textContent;
+    if (cardName === name) {
+      card.insertAdjacentHTML('beforeend',
+        '<div class="remove-confirm" style="display:flex;gap:6px;align-items:center;margin-left:8px;">'
+        + '<span style="font-size:10px;color:var(--red);">Remove?</span>'
+        + '<button onclick="confirmRemove()" style="padding:2px 8px;font-size:10px;background:var(--red);color:var(--crust);border:none;border-radius:var(--radius,6px);cursor:pointer;">Yes</button>'
+        + '<button onclick="cancelRemove()" style="padding:2px 8px;font-size:10px;background:var(--surface1);color:var(--text);border:none;border-radius:var(--radius,6px);cursor:pointer;">No</button>'
+        + '</div>');
+    }
+  });
+}
+async function confirmRemove() {
+  if (!pendingRemove) return;
+  await fetch(API + '/projects/' + encodeURIComponent(pendingRemove), { method: 'DELETE' });
+  pendingRemove = null;
+  await loadProjects();
+  notifyParent();
+  DevOpsPilot.toast('Project removed.', 'success');
+}
+function cancelRemove() {
+  pendingRemove = null;
+  document.querySelectorAll('.remove-confirm').forEach(function(el) { el.remove(); });
+}
+
+function togglePw() {
+  var el = document.getElementById('fToken');
+  el.type = el.type === 'password' ? 'text' : 'password';
+}
+
+function notifyParent() {
+  try {
+    window.parent.postMessage({ __devopsPilot: true, type: 'configChanged', plugin: 'sanity' }, '*');
+  } catch (_) {}
+}
+
+// Auto-resize the iframe to fit content
+function resizeFrame() {
+  try {
+    var h = Math.max(320, document.body.scrollHeight + 24);
+    if (window.frameElement) window.frameElement.style.height = h + 'px';
+  } catch (_) {}
+}
+new MutationObserver(resizeFrame).observe(document.body, { childList: true, subtree: true, attributes: true });
+
+loadProjects();
+</script>
+</body>
+</html>

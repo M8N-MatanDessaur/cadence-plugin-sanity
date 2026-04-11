@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<script src="/plugins/sdk/devops-pilot-sdk.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  ::-webkit-scrollbar { width: 7px; height: 7px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--surface1); border-radius: 99px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--surface2); }
+  body { margin: 0; font-size: 12px; overflow-y: auto; }
+
+  .header {
+    padding: 8px 12px; font-size: 11px; font-weight: 600; color: var(--subtext0);
+    text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--surface0);
+    display: flex; align-items: center; position: sticky; top: 0; background: var(--base); z-index: 1;
+  }
+  .header .spacer { flex: 1; }
+  .refresh-btn {
+    cursor: pointer; background: none; border: none; color: var(--subtext0);
+    font: 10px var(--font-ui); padding: 2px 6px; border-radius: var(--radius);
+  }
+  .refresh-btn:hover { color: var(--text); background: var(--surface0); }
+
+  .item {
+    padding: 8px 12px; border-bottom: 1px solid var(--surface0);
+    cursor: pointer; transition: background 0.1s;
+  }
+  .item:hover { background: var(--surface0); }
+  .item-row1 { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
+  .item-name {
+    flex: 1; min-width: 0; font-weight: 500; color: var(--text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px;
+  }
+  .item-time { font-size: 10px; color: var(--overlay1); white-space: nowrap; flex-shrink: 0; }
+  .item-row2 { display: flex; align-items: center; gap: 6px; }
+  .item-type { font-size: 10px; font-weight: 500; color: var(--teal); }
+  .dot { color: var(--overlay0); font-size: 8px; }
+  .item-id { font-size: 10px; color: var(--overlay1); font-family: var(--font-mono); max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .item-hint { font-size: 10px; color: var(--overlay1); margin-left: auto; opacity: 0; transition: opacity 0.1s; }
+  .item:hover .item-hint { opacity: 1; }
+
+  .empty { padding: 24px 12px; color: var(--subtext0); text-align: center; font-size: 12px; line-height: 1.6; }
+</style>
+</head>
+<body>
+  <div class="header">
+    Recent Changes
+    <div class="spacer"></div>
+    <button class="refresh-btn" onclick="load()">Refresh</button>
+  </div>
+  <div id="feed"><div class="empty">Loading...</div></div>
+
+<script>
+var API = '/api/plugins/sanity';
+
+async function load() {
+  var feed = document.getElementById('feed');
+  feed.innerHTML = '<div class="empty">Loading...</div>';
+
+  try {
+    var cfg = await doFetch('GET', '/config');
+    if (!cfg.configured) {
+      feed.innerHTML = '<div class="empty">Not connected.<br>Open Sanity tab to set up.</div>';
+      return;
+    }
+
+    var types = await doFetch('GET', '/types');
+    if (types.error || !Array.isArray(types) || !types.length) {
+      feed.innerHTML = '<div class="empty">No document types found</div>';
+      return;
+    }
+
+    // Fetch recent documents from top types in parallel
+    var allDocs = [];
+    var results = await Promise.all(
+      types.slice(0, 8).map(function (dt) {
+        return doFetch('GET', '/documents/' + dt.name + '?limit=10').then(function (docs) {
+          if (!docs.error && Array.isArray(docs)) {
+            docs.forEach(function (d) { d._docType = dt.name; });
+            return docs;
+          }
+          return [];
+        }).catch(function () { return []; });
+      })
+    );
+    results.forEach(function (r) { allDocs = allDocs.concat(r); });
+
+    allDocs.sort(function (a, b) {
+      var ta = a._updatedAt || a._createdAt || '';
+      var tb = b._updatedAt || b._createdAt || '';
+      return tb.localeCompare(ta);
+    });
+    var items = allDocs.slice(0, 30);
+
+    if (!items.length) {
+      feed.innerHTML = '<div class="empty">No documents yet</div>';
+      return;
+    }
+
+    var html = '';
+    for (var i = 0; i < items.length; i++) {
+      var d = items[i];
+      var title = d.title || d.name || d.heading || d._id;
+      var shortId = d._id.length > 16 ? d._id.substring(0, 16) + '...' : d._id;
+      html += '<div class="item" onclick="inspect(\'' + esc(d._docType) + '\',\'' + esc(d._id) + '\',\'' + esc((title || '').replace(/'/g, '')) + '\')" title="Click to inspect with AI">' +
+        '<div class="item-row1">' +
+          '<span class="item-name">' + esc(title) + '</span>' +
+          '<span class="item-time">' + timeAgo(d._updatedAt) + '</span>' +
+        '</div>' +
+        '<div class="item-row2">' +
+          '<span class="item-type">' + esc(dn(d._docType)) + '</span>' +
+          '<span class="dot">&#183;</span>' +
+          '<span class="item-id">' + esc(shortId) + '</span>' +
+          '<span class="item-hint">Ask AI</span>' +
+        '</div>' +
+      '</div>';
+    }
+    feed.innerHTML = html;
+  } catch (err) {
+    feed.innerHTML = '<div class="empty">Error: ' + esc(String(err.message || err)) + '</div>';
+  }
+}
+
+function inspect(docType, id, title) {
+  DevOpsPilot.askAi(
+    'Fetch this Sanity document:\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/documents/' + docType + '/' + id + '\n\n' +
+    'Show me "' + title + '" from the "' + docType + '" type in a readable format. Then ask what I want to do -- edit fields, duplicate, or delete it.'
+  );
+}
+
+async function doFetch(method, path) {
+  var r = await fetch('http://127.0.0.1:3800' + API + path, {
+    method: method, headers: { 'Content-Type': 'application/json' }
+  });
+  return r.json();
+}
+
+function timeAgo(ts) {
+  if (!ts) return '';
+  var d = Date.now() - new Date(ts).getTime(), m = Math.floor(d / 60000);
+  if (m < 1) return 'now';
+  if (m < 60) return m + 'm';
+  var h = Math.floor(m / 60);
+  if (h < 24) return h + 'h';
+  var days = Math.floor(h / 24);
+  if (days < 30) return days + 'd';
+  return new Date(ts).toLocaleDateString();
+}
+
+function dn(n) { return (n || '').split(/[-_]/).map(function (w) { return w.charAt(0).toUpperCase() + w.slice(1); }).join(' '); }
+function esc(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+load();
+setInterval(load, 120000);
+</script>
+</body>
+</html>

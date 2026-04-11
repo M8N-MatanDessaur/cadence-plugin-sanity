@@ -1,0 +1,2568 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.snow.css">
+<script src="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.min.js"></script>
+<script src="/plugins/sdk/devops-pilot-sdk.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  ::-webkit-scrollbar { width: 7px; height: 7px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--surface1); border-radius: 99px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--surface2); }
+  body { margin: 0; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
+
+  /* ================================================================
+     TOOLBAR
+     ================================================================ */
+  .toolbar {
+    height: 42px; min-height: 42px; display: flex; align-items: center; gap: 8px;
+    padding: 0 12px; background: var(--mantle); border-bottom: 1px solid var(--surface0);
+    z-index: 10;
+  }
+  .toolbar-icon { width: 20px; height: 20px; color: rgb(242, 77, 52); flex-shrink: 0; }
+  .toolbar-title { font-size: 13px; font-weight: 700; white-space: nowrap; }
+  .conn-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; background: var(--surface1); }
+  .conn-dot.ok { background: var(--green); }
+  .conn-dot.err { background: var(--red); }
+  .conn-dot.pending { background: var(--yellow); }
+  .project-select {
+    background: var(--surface0); border: 1px solid var(--surface1); color: var(--text);
+    padding: 3px 8px; border-radius: var(--radius); font: 12px var(--font-ui);
+    max-width: 220px; cursor: pointer; outline: none;
+  }
+  .project-select:focus { border-color: var(--accent); }
+  .spacer { flex: 1; }
+  .btn {
+    background: var(--surface1); border: 1px solid var(--overlay0); color: var(--text);
+    padding: 5px 12px; border-radius: var(--radius); cursor: pointer; font: 12px var(--font-ui);
+    white-space: nowrap;
+  }
+  .btn:hover { border-color: var(--accent); }
+  .btn.primary { background: var(--accent); color: var(--crust); border-color: transparent; }
+  .btn.primary:hover { filter: brightness(1.1); }
+  .btn.sm { padding: 4px 10px; font-size: 11px; }
+  .btn.danger { color: var(--red); }
+  .btn.danger:hover { border-color: var(--red); }
+  .btn-icon {
+    background: none; border: none; color: var(--subtext0); cursor: pointer; padding: 4px;
+    display: inline-flex; align-items: center; justify-content: center; border-radius: var(--radius);
+  }
+  .btn-icon:hover { color: var(--text); background: var(--surface0); }
+
+  /* ================================================================
+     MAIN LAYOUT: sidebar | content | detail
+     ================================================================ */
+  .main { display: flex; flex: 1; overflow: hidden; }
+  .main.no-detail .detail { display: none; }
+  .main.no-detail .content-col { flex: 1; max-width: none; }
+
+  /* -- Sidebar ---------------------------------------------------- */
+  .sidebar {
+    width: 200px; min-width: 200px; max-width: 200px; background: var(--mantle);
+    border-right: 1px solid var(--surface0); display: flex; flex-direction: column;
+    overflow-y: auto; padding: 8px 0;
+  }
+  .nav-section { padding: 0 10px; margin-bottom: 4px; }
+  .nav-section-title {
+    font-size: 10px; font-weight: 700; color: var(--overlay1); text-transform: uppercase;
+    letter-spacing: 0.5px; padding: 8px 8px 4px; user-select: none;
+  }
+  .nav-item {
+    display: flex; align-items: center; gap: 8px; padding: 6px 8px;
+    border-radius: var(--radius); cursor: pointer; color: var(--subtext1);
+    font-size: 12px; user-select: none; transition: all 0.08s;
+  }
+  .nav-item:hover { background: var(--surface0); color: var(--text); }
+  .nav-item.active { background: var(--surface0); color: var(--text); border-left: 2px solid var(--accent); }
+  .nav-item .nav-icon { width: 14px; height: 14px; flex-shrink: 0; opacity: 0.7; }
+  .nav-item .nav-label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .nav-item .nav-count {
+    font-size: 10px; background: var(--surface1); color: var(--subtext0);
+    padding: 1px 6px; border-radius: 99px; font-weight: 600; flex-shrink: 0;
+  }
+
+  /* -- Content Column --------------------------------------------- */
+  .content-col {
+    width: 320px; min-width: 260px; max-width: 420px;
+    flex-direction: column; border-right: 1px solid var(--surface0);
+  }
+  .filter-bar {
+    display: flex; align-items: center; gap: 6px; padding: 8px 12px;
+    border-bottom: 1px solid var(--surface0); flex-shrink: 0;
+  }
+  .search {
+    flex: 1; min-width: 0; background: var(--surface0); border: 1px solid var(--overlay0);
+    color: var(--text); padding: 5px 10px; border-radius: var(--radius);
+    font: 12px var(--font-ui); outline: none;
+  }
+  .search:focus { border-color: var(--accent); }
+  .search::placeholder { color: var(--subtext0); }
+  .sel {
+    background: var(--surface0); border: 1px solid var(--overlay0); color: var(--text);
+    padding: 5px 6px; border-radius: var(--radius); font: 11px var(--font-ui); outline: none;
+  }
+  .count { font-size: 10px; color: var(--subtext0); white-space: nowrap; }
+  .list { flex: 1; overflow-y: auto; }
+  .row {
+    display: flex; align-items: center; gap: 10px; padding: 9px 12px;
+    border-bottom: 1px solid var(--surface0); cursor: pointer; transition: background 0.08s;
+  }
+  .row:hover { background: var(--surface0); }
+  .row.selected { background: var(--surface0); border-left: 2px solid var(--accent); }
+  .status-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .status-dot.published { background: var(--green); }
+  .status-dot.draft { background: var(--yellow); }
+  .status-dot.unknown { background: var(--surface2); }
+  .row-body { flex: 1; min-width: 0; }
+  .row-title { font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row-meta { font-size: 10px; color: var(--subtext0); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row-badge {
+    font-size: 9px; padding: 2px 6px; border-radius: 3px; font-weight: 600;
+    background: var(--surface1); color: var(--subtext0); flex-shrink: 0; text-transform: uppercase;
+  }
+  .row-badge.draft { background: rgba(249,226,175,0.15); color: var(--yellow); }
+  .row-badge.published { background: rgba(166,227,161,0.15); color: var(--green); }
+
+  /* -- Media Grid ------------------------------------------------- */
+  .media-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 6px; padding: 10px; flex: 1; overflow-y: auto; align-content: start;
+  }
+  .media-card {
+    position: relative; border-radius: var(--radius); overflow: hidden;
+    aspect-ratio: 1; background: var(--surface0); cursor: pointer; border: 2px solid transparent;
+  }
+  .media-card:hover { border-color: var(--overlay0); }
+  .media-card.selected { border-color: var(--accent); }
+  .media-card img { width: 100%; height: 100%; object-fit: cover; }
+  .media-card .media-label {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    background: linear-gradient(transparent, rgba(0,0,0,0.7));
+    color: #fff; font-size: 9px; padding: 14px 6px 4px; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+  }
+  .media-card .file-icon {
+    display: flex; align-items: center; justify-content: center;
+    width: 100%; height: 100%; font-size: 10px; color: var(--subtext0); font-weight: 600;
+    text-transform: uppercase;
+  }
+
+  /* -- Detail Panel ----------------------------------------------- */
+  .detail {
+    flex: 1; min-width: 360px; display: flex; flex-direction: column;
+    overflow: hidden; background: var(--base);
+  }
+  .detail-header {
+    display: flex; align-items: center; gap: 8px; padding: 10px 16px;
+    border-bottom: 1px solid var(--surface0); flex-shrink: 0;
+  }
+  .detail-title { flex: 1; font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .detail-subtitle { font-size: 11px; color: var(--subtext0); }
+  .tabs {
+    display: flex; gap: 0; border-bottom: 1px solid var(--surface0); flex-shrink: 0;
+    padding: 0 16px;
+  }
+  .tab {
+    padding: 8px 14px; font-size: 12px; color: var(--subtext0); cursor: pointer;
+    border-bottom: 2px solid transparent; transition: all 0.1s; user-select: none;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+  .detail-body { flex: 1; overflow-y: auto; padding: 16px 18px; min-height: 0; }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+  .detail-actions {
+    display: flex; align-items: center; gap: 6px; padding: 10px 16px;
+    border-top: 1px solid var(--surface0); flex-shrink: 0;
+  }
+
+  /* -- Form Fields ------------------------------------------------ */
+  .field { margin-bottom: 14px; }
+  .field-label { font-size: 11px; color: var(--subtext0); font-weight: 600; margin-bottom: 4px; display: block; }
+  .field-hint { font-size: 10px; color: var(--overlay1); margin-top: 2px; }
+  .field-input {
+    width: 100%; background: var(--surface0); border: 1px solid var(--overlay0); color: var(--text);
+    padding: 7px 10px; border-radius: var(--radius); font: 12px var(--font-ui); outline: none;
+  }
+  .field-input:focus { border-color: var(--accent); }
+  .field-input::placeholder { color: var(--subtext0); }
+  textarea.field-input { resize: vertical; min-height: 80px; font-family: var(--font-ui); }
+  select.field-input { cursor: pointer; }
+  .field-input.mono { font-family: var(--font-mono); font-size: 11px; }
+  .field-readonly {
+    font-size: 12px; color: var(--subtext0); padding: 7px 10px;
+    background: var(--mantle); border-radius: var(--radius); font-family: var(--font-mono);
+    word-break: break-all;
+  }
+  .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .field-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+
+  /* -- Component / Array Cards ------------------------------------ */
+  .component-list { display: flex; flex-direction: column; gap: 6px; }
+  .component-card {
+    background: var(--surface0); border: 1px solid var(--overlay0); border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .component-header {
+    display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+    cursor: pointer; user-select: none; font-size: 12px;
+  }
+  .component-header:hover { background: var(--surface1); }
+  .component-arrow { font-size: 10px; color: var(--subtext0); transition: transform 0.12s; flex-shrink: 0; }
+  .component-card.open .component-arrow { transform: rotate(90deg); }
+  .component-type-badge {
+    font-size: 10px; padding: 1px 6px; border-radius: 3px; font-weight: 600;
+    background: rgba(242,77,52,0.12); color: var(--peach); flex-shrink: 0;
+  }
+  .component-title { flex: 1; min-width: 0; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .component-body { display: none; padding: 10px 12px; border-top: 1px solid var(--surface1); }
+  .component-card.open .component-body { display: block; }
+  .component-body .field { margin-bottom: 10px; }
+  .component-body .field:last-child { margin-bottom: 0; }
+
+  /* -- Link Item ------------------------------------------------- */
+  .link-row {
+    display: flex; align-items: center; gap: 8px; padding: 6px 10px;
+    background: var(--surface0); border: 1px solid var(--overlay0); border-radius: var(--radius);
+    margin-bottom: 4px; font-size: 12px;
+  }
+  .link-row .link-label { font-weight: 500; min-width: 80px; }
+  .link-row .link-url { color: var(--subtext0); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* -- Portable Text Preview ------------------------------------- */
+  .pt-preview {
+    background: var(--surface0); border: 1px solid var(--overlay0); border-radius: var(--radius);
+    padding: 12px 14px; font-size: 12px; line-height: 1.6; max-height: 200px; overflow-y: auto;
+    color: var(--subtext1);
+  }
+  .pt-preview h2, .pt-preview h3, .pt-preview h4 { font-size: 13px; font-weight: 600; color: var(--text); margin: 8px 0 4px; }
+  .pt-preview p { margin: 4px 0; }
+  .pt-preview strong { color: var(--text); }
+  .pt-preview ul, .pt-preview ol { padding-left: 16px; margin: 4px 0; }
+
+  /* -- Image Preview in Fields ----------------------------------- */
+  .field-image-preview {
+    width: 100%; max-height: 180px; object-fit: contain; border-radius: var(--radius);
+    background: var(--surface0); margin-bottom: 4px;
+  }
+
+  /* -- Reference Items -------------------------------------------- */
+  .ref-item {
+    display: flex; align-items: center; gap: 8px; padding: 6px 8px;
+    border-radius: var(--radius); font-size: 12px; cursor: default;
+  }
+  .ref-item:hover { background: var(--surface0); }
+  .ref-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .ref-dot.in { background: var(--blue); }
+  .ref-dot.out { background: var(--peach); }
+  .ref-title { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ref-type { font-size: 10px; color: var(--subtext0); background: var(--surface1); padding: 1px 6px; border-radius: 3px; }
+
+  /* -- Home Dashboard --------------------------------------------- */
+  .home { flex: 1; overflow-y: auto; padding: 24px 28px; flex-direction: column; gap: 20px; }
+  .home-header h1 { margin: 0 0 4px; font-size: 20px; font-weight: 700; }
+  .home-subtitle { font-size: 12px; color: var(--subtext0); }
+  .home-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px;
+  }
+  .home-card {
+    background: var(--surface0); border: 1px solid var(--overlay0); border-radius: var(--radius-lg, 8px);
+    padding: 16px; cursor: pointer; transition: all 0.12s;
+  }
+  .home-card:hover { border-color: var(--accent); transform: translateY(-1px); }
+  .home-card .hc-val { font-size: 26px; font-weight: 700; line-height: 1; }
+  .home-card .hc-val.accent { color: var(--accent); }
+  .home-card .hc-val.green { color: var(--green); }
+  .home-card .hc-val.yellow { color: var(--yellow); }
+  .home-card .hc-val.peach { color: var(--peach); }
+  .home-card .hc-label { font-size: 11px; color: var(--subtext0); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .home-section-title {
+    font-size: 12px; font-weight: 700; color: var(--subtext0); text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .home-quick-actions {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px;
+  }
+  .home-action {
+    background: var(--surface0); border: 1px solid var(--overlay0); border-radius: var(--radius-lg, 8px);
+    padding: 14px 16px; cursor: pointer; transition: all 0.12s;
+  }
+  .home-action:hover { border-color: var(--accent); background: var(--surface1); transform: translateY(-1px); }
+  .home-action .ha-title { font-size: 13px; font-weight: 600; margin-bottom: 3px; }
+  .home-action .ha-desc { font-size: 11px; color: var(--subtext0); line-height: 1.4; }
+  .home-issues { display: flex; flex-direction: column; gap: 4px; }
+  .home-issue {
+    font-size: 12px; padding: 8px 12px; border-radius: var(--radius);
+    background: var(--surface0); border-left: 3px solid var(--overlay0);
+  }
+  .home-issue.warn { border-left-color: var(--yellow); }
+  .home-issue.info { border-left-color: var(--blue); }
+  .home-issue.err { border-left-color: var(--red); }
+  .home-recent { display: flex; flex-direction: column; }
+  .home-recent-item {
+    display: flex; align-items: center; gap: 10px; padding: 7px 8px;
+    border-radius: var(--radius); font-size: 12px;
+  }
+  .home-recent-item:hover { background: var(--surface0); }
+  .home-recent-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .home-recent-type { font-size: 10px; color: var(--teal); font-weight: 500; }
+  .home-recent-time { font-size: 10px; color: var(--overlay1); white-space: nowrap; }
+
+  /* -- Setup Screen ----------------------------------------------- */
+  .setup {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    flex: 1; gap: 12px; padding: 40px;
+  }
+  .setup h2 { margin: 0; }
+  .setup p { color: var(--subtext0); max-width: 400px; text-align: center; line-height: 1.5; }
+
+  /* -- Empty & Loading States ------------------------------------- */
+  .empty-msg { text-align: center; color: var(--subtext0); padding: 32px; font-size: 13px; }
+  .skeleton { display: flex; flex-direction: column; gap: 2px; padding: 8px 0; }
+  .skeleton-row {
+    height: 38px; background: var(--surface0); border-radius: var(--radius);
+    animation: shimmer 1.2s ease-in-out infinite alternate;
+  }
+  @keyframes shimmer { from { opacity: 0.5; } to { opacity: 1; } }
+
+  /* -- Modal ------------------------------------------------------ */
+  .modal-overlay {
+    position: fixed; inset: 0; z-index: 3000; display: flex;
+    align-items: center; justify-content: center; background: rgba(0,0,0,0.55);
+  }
+  .modal {
+    background: var(--base); border: 1px solid var(--overlay0); border-radius: var(--radius-lg, 8px);
+    width: 440px; max-width: 90vw; box-shadow: 0 16px 48px rgba(0,0,0,0.3);
+  }
+  .modal-header { padding: 14px 20px; border-bottom: 1px solid var(--overlay0); font-weight: 600; font-size: 14px; }
+  .modal-body { padding: 20px; }
+  .modal-actions { padding: 12px 20px; border-top: 1px solid var(--overlay0); display: flex; justify-content: flex-end; gap: 8px; }
+
+  /* -- Toast ------------------------------------------------------ */
+  .toast {
+    position: fixed; bottom: 16px; right: 16px; z-index: 4000;
+    background: var(--surface0); border: 1px solid var(--overlay0);
+    border-radius: var(--radius); padding: 10px 16px; font-size: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2); border-left: 3px solid var(--accent);
+    animation: fadeIn 0.15s;
+  }
+  .toast.ok { border-left-color: var(--green); }
+  .toast.err { border-left-color: var(--red); }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* -- Rich Text Editor (Quill) ----------------------------------- */
+  .rte-wrap {
+    display: flex; flex-direction: column; min-width: 0;
+    background: var(--surface0); border: 1px solid var(--surface1);
+    border-radius: var(--radius); overflow: hidden;
+  }
+  .rte-toolbar-extra {
+    display: flex; gap: 4px; padding: 4px 6px;
+    background: var(--mantle); border-bottom: 1px solid var(--surface1);
+  }
+  .rte-toolbar-extra button {
+    padding: 3px 8px; font-size: 10px; background: transparent;
+    color: var(--subtext0); border: 1px solid transparent;
+    border-radius: 3px; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  .rte-toolbar-extra button:hover { color: var(--text); background: var(--surface0); }
+  .rte-toolbar-extra button.active { color: var(--text); background: var(--surface1); }
+  .rte-toolbar-extra button svg { width: 11px; height: 11px; }
+  .rte-wrap .ql-toolbar.ql-snow {
+    border: none !important; border-bottom: 1px solid var(--surface1) !important;
+    background: var(--mantle);
+  }
+  .rte-wrap .ql-toolbar.ql-snow .ql-stroke { stroke: var(--subtext1); }
+  .rte-wrap .ql-toolbar.ql-snow .ql-fill { fill: var(--subtext1); }
+  .rte-wrap .ql-toolbar.ql-snow .ql-picker { color: var(--subtext1); }
+  .rte-wrap .ql-toolbar.ql-snow button:hover .ql-stroke,
+  .rte-wrap .ql-toolbar.ql-snow button.ql-active .ql-stroke { stroke: var(--accent); }
+  .rte-wrap .ql-toolbar.ql-snow button:hover .ql-fill,
+  .rte-wrap .ql-toolbar.ql-snow button.ql-active .ql-fill { fill: var(--accent); }
+  .rte-wrap .ql-container.ql-snow {
+    border: none !important; background: var(--base); color: var(--text);
+    font-family: var(--font-ui); font-size: 13px; min-height: 160px;
+  }
+  .rte-wrap .ql-editor { min-height: 160px; max-height: 400px; }
+  .rte-wrap .ql-editor.ql-blank::before { color: var(--overlay1); font-style: normal; }
+  .rte-wrap .ql-picker-options { background: var(--mantle); border-color: var(--surface1) !important; }
+  .rte-code-view {
+    display: none; width: 100%; min-height: 200px; padding: 10px 12px;
+    background: var(--base); color: var(--text); border: none; outline: none;
+    font-family: var(--font-mono); font-size: 11px; line-height: 1.55;
+    resize: vertical; white-space: pre; overflow: auto;
+  }
+  .rte-wrap.code-view .ql-container { display: none; }
+  .rte-wrap.code-view .ql-toolbar { display: none; }
+  .rte-wrap.code-view .rte-code-view { display: block; }
+  .rte-wrap.fullscreen {
+    position: fixed; inset: 0; z-index: 1000; border-radius: 0; background: var(--base);
+  }
+  .rte-wrap.fullscreen .ql-editor { max-height: none; height: calc(100vh - 92px); }
+  .rte-wrap.fullscreen .rte-code-view { height: calc(100vh - 50px); min-height: 0; }
+
+  /* -- Preview Panel ---------------------------------------------- */
+  .detail-preview-wrap { display: none; border-top: 1px solid var(--surface0); flex-shrink: 0; }
+  .detail-preview-wrap.active { display: block; }
+  .preview-section-header {
+    display: flex; align-items: center; gap: 6px; padding: 7px 10px;
+    background: var(--mantle); border-bottom: 1px solid var(--surface1);
+    font-size: 10px; font-weight: 600; text-transform: uppercase;
+    color: var(--subtext0); letter-spacing: 0.4px;
+  }
+  .preview-section-header svg { width: 11px; height: 11px; }
+  .preview-section-header .spacer { flex: 1; }
+  .preview-section-header .btn-mini {
+    padding: 3px 8px; font-size: 10px; background: transparent;
+    border: 1px solid var(--surface1); color: var(--subtext0);
+    border-radius: 3px; cursor: pointer; font-family: var(--font-ui);
+    display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;
+  }
+  .preview-section-header .btn-mini svg { width: 11px; height: 11px; }
+  .preview-section-header .btn-mini:hover { border-color: var(--accent); color: var(--text); }
+  .preview-viewport {
+    position: relative; width: 100%; overflow: auto; background: #fff;
+  }
+  .preview-viewport iframe {
+    position: absolute; top: 0; left: 0;
+    width: 100%; height: 100%; border: none;
+  }
+  .preview-viewport.loading::before {
+    content: 'Loading preview...'; position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    font: 11px var(--font-ui); color: #888; background: var(--crust); z-index: 2;
+  }
+  .preview-zoom-label { font-size: 10px; color: var(--subtext0); min-width: 34px; text-align: center; font-variant-numeric: tabular-nums; }
+  .home-preview { margin-top: 4px; border-radius: var(--radius); border: 1px solid var(--overlay0); }
+  .home-preview-header {
+    display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+    background: var(--mantle); border-bottom: 1px solid var(--surface1);
+    font-size: 10px; font-weight: 600; text-transform: uppercase;
+    color: var(--subtext0); letter-spacing: 0.4px;
+  }
+  .home-preview-header svg { width: 13px; height: 13px; flex-shrink: 0; }
+  .home-preview-header .spacer { flex: 1; }
+  .home-preview-header .btn-mini {
+    padding: 3px 10px; font-size: 10px; background: transparent;
+    border: 1px solid var(--surface1); color: var(--subtext0);
+    border-radius: 3px; cursor: pointer; font-family: var(--font-ui);
+    white-space: nowrap; flex-shrink: 0;
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  .home-preview-header .btn-mini svg { width: 11px; height: 11px; }
+  .home-preview-header .btn-mini:hover { border-color: var(--accent); color: var(--text); }
+  .home-preview-viewport {
+    position: relative; width: 100%; overflow: auto; background: #fff;
+  }
+  .home-preview-viewport iframe {
+    position: absolute; top: 0; left: 0;
+    width: 100%; height: 100%; border: none;
+  }
+  .home-preview-viewport.loading::before {
+    content: 'Loading preview...'; position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    font: 11px var(--font-ui); color: #888; background: var(--crust); z-index: 2;
+  }
+
+  /* -- JSON Editor ------------------------------------------------ */
+  .editor-view { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+  .editor-view.active { display: flex; }
+  .editor-toolbar {
+    display: flex; align-items: center; gap: 8px; padding: 8px 16px;
+    border-bottom: 1px solid var(--overlay0); background: var(--mantle); flex-shrink: 0;
+  }
+  .editor-toolbar h2 { margin: 0; font-size: 14px; font-weight: 600; }
+  .editor-toolbar .path { font-size: 11px; color: var(--subtext0); font-family: var(--font-mono); }
+  #editorContainer { flex: 1; overflow: hidden; }
+  .editor-status {
+    padding: 6px 16px; font-size: 11px; color: var(--subtext0);
+    border-top: 1px solid var(--overlay0); background: var(--mantle);
+    flex-shrink: 0; display: flex; align-items: center; gap: 8px;
+  }
+  .editor-status .err-text { color: var(--red); }
+
+  /* -- Responsive ------------------------------------------------- */
+  @media (max-width: 900px) {
+    .sidebar { width: 48px; min-width: 48px; max-width: 48px; }
+    .nav-item .nav-label, .nav-item .nav-count, .nav-section-title { display: none; }
+    .nav-item { justify-content: center; padding: 8px; }
+    .field-grid, .field-grid-3 { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ================================================================
+     TOOLBAR
+     ================================================================ -->
+<div class="toolbar">
+  <svg class="toolbar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/></svg>
+  <span class="toolbar-title">Sanity</span>
+  <span class="conn-dot" id="connDot"></span>
+  <select class="project-select" id="projectSelect" onchange="switchProject(this.value)"></select>
+  <span class="spacer"></span>
+  <button class="btn sm" id="studioBtn" style="display:none;" onclick="openStudio()">Open Studio</button>
+  <button class="btn sm" onclick="refresh()">Refresh</button>
+</div>
+
+<!-- ================================================================
+     SETUP SCREEN (shown when not configured)
+     ================================================================ -->
+<div class="setup" id="setupScreen" style="display:none;">
+  <h2>Sanity.io</h2>
+  <p>No Sanity projects configured. Add your Project ID, Dataset, and API Token in Settings to get started.</p>
+  <button class="btn primary" style="padding:8px 24px;" onclick="DevOpsPilot.openSettings('plugins')">Open Settings</button>
+</div>
+
+<!-- ================================================================
+     MAIN VIEW (sidebar + content + detail)
+     ================================================================ -->
+<div class="main no-detail" id="mainView" style="display:none;">
+
+  <!-- Sidebar (always visible) -->
+  <div class="sidebar" id="sidebar"></div>
+
+  <!-- Home Dashboard (shown when Home is selected, replaces content+detail) -->
+  <div class="home" id="homeView" style="display:none;"></div>
+
+  <!-- Content Column (list/grid -- hidden on Home) -->
+  <div class="content-col" id="contentCol" style="display:none;">
+    <div class="filter-bar" id="filterBar">
+      <input class="search" id="searchInput" type="text" placeholder="Search..." oninput="onSearch()">
+      <select class="sel" id="statusFilter" onchange="onStatusFilter()" style="display:none;">
+        <option value="all">All</option>
+        <option value="published">Published</option>
+        <option value="draft">Drafts</option>
+      </select>
+      <span class="count" id="listCount"></span>
+    </div>
+    <div class="list" id="listContainer"></div>
+  </div>
+
+  <!-- Detail Panel -->
+  <div class="detail" id="detailPanel">
+    <div class="detail-header">
+      <div style="flex:1;min-width:0;">
+        <div class="detail-title" id="detailTitle"></div>
+        <div class="detail-subtitle" id="detailSubtitle"></div>
+      </div>
+      <button class="btn-icon" onclick="closeDetail()" title="Close">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="tabs" id="detailTabs">
+      <div class="tab active" data-tab="content" onclick="switchTab('content')">Content</div>
+      <div class="tab" data-tab="references" onclick="switchTab('references')">References</div>
+      <div class="tab" data-tab="meta" onclick="switchTab('meta')">Meta</div>
+    </div>
+    <div class="detail-body" id="detailBody">
+      <div class="tab-panel active" id="panelContent"></div>
+      <div class="tab-panel" id="panelReferences"></div>
+      <div class="tab-panel" id="panelMeta"></div>
+    </div>
+    <div class="detail-preview-wrap" id="detailPreviewWrap"></div>
+    <div class="detail-actions" id="detailActions"></div>
+  </div>
+</div>
+
+<!-- ================================================================
+     JSON EDITOR (full-screen overlay)
+     ================================================================ -->
+<div class="editor-view" id="editorView">
+  <div class="editor-toolbar">
+    <button class="btn sm" id="editorBack" onclick="closeEditor()">Back</button>
+    <h2 id="editorTitle"></h2>
+    <span class="path" id="editorPath"></span>
+    <span class="spacer"></span>
+    <button class="btn primary sm" onclick="saveEditor()">Save</button>
+  </div>
+  <div id="editorContainer"></div>
+  <div class="editor-status">
+    <span id="editorStatus">Ready</span>
+    <span class="spacer"></span>
+    <span>Ctrl+S to save</span>
+  </div>
+</div>
+
+<!-- ================================================================
+     MODAL
+     ================================================================ -->
+<div id="modalRoot"></div>
+
+<script>
+// ============================================================================
+// STATE
+// ============================================================================
+var API = '/api/plugins/sanity';
+var state = {
+  configured: false,
+  projects: [],
+  activeProject: '',
+  section: null,      // { kind, slug, label, count }
+  items: [],
+  selected: null,     // full document object
+  search: '',
+  statusFilter: 'all',
+  health: null,
+  docTypes: [],
+};
+
+// ============================================================================
+// INIT
+// ============================================================================
+async function init() {
+  await loadProjectSelector();
+  var cfg = await api('GET', '/config');
+  if (!cfg || !cfg.configured) {
+    document.getElementById('setupScreen').style.display = 'flex';
+    document.getElementById('mainView').style.display = 'none';
+    return;
+  }
+  state.configured = true;
+  document.getElementById('setupScreen').style.display = 'none';
+
+  // Load health data for sidebar counts
+  await loadHealth();
+  renderSidebar();
+  selectSection({ kind: 'home', slug: 'home', label: 'Home' });
+}
+
+async function refresh() {
+  if (state.section && state.section.kind === 'home') {
+    await loadHealth();
+    renderHome();
+  } else {
+    await loadSection();
+  }
+}
+
+// ============================================================================
+// PROJECT SELECTOR
+// ============================================================================
+async function loadProjectSelector() {
+  try {
+    var r = await api('GET', '/projects');
+    state.projects = r.projects || [];
+    state.activeProject = r.activeProject || '';
+  } catch (_) {
+    state.projects = [];
+    state.activeProject = '';
+  }
+  var sel = document.getElementById('projectSelect');
+  if (!state.projects.length) {
+    sel.innerHTML = '<option value="">-- not configured --</option>';
+    return;
+  }
+  sel.innerHTML = state.projects.map(function(p) {
+    return '<option value="' + esc(p.name) + '"' + (p.name === state.activeProject ? ' selected' : '') + '>'
+      + esc(p.name) + ' (' + esc(p.projectId) + '/' + esc(p.dataset) + ')</option>';
+  }).join('');
+}
+
+async function switchProject(name) {
+  if (!name) return;
+  await api('POST', '/projects/active', { name: name });
+  state.activeProject = name;
+  // Also set the active repo in DevOps Pilot if this project has one
+  var proj = state.projects.find(function(p) { return p.name === name; });
+  if (proj && proj.repoPath) {
+    // Find repo name by matching path
+    try {
+      var repos = await (await fetch('/api/repos')).json();
+      var normalized = proj.repoPath.replace(/\\\\/g, '/').replace(/\\/g, '/').replace(/\/+$/, '');
+      for (var rn in repos) {
+        var rp = repos[rn].replace(/\\\\/g, '/').replace(/\\/g, '/').replace(/\/+$/, '');
+        if (rp === normalized) {
+          await fetch('/api/ui/context', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ activeRepo: rn }),
+          });
+          break;
+        }
+      }
+    } catch (_) {}
+  }
+  await init();
+}
+
+// ============================================================================
+// HEALTH / DISCOVERY
+// ============================================================================
+async function loadHealth() {
+  var dot = document.getElementById('connDot');
+  dot.className = 'conn-dot pending';
+  var h = await api('GET', '/health');
+  if (h.error) {
+    dot.className = 'conn-dot err';
+    state.health = null;
+    state.docTypes = [];
+    return;
+  }
+  dot.className = 'conn-dot ok';
+  state.health = h;
+  state.docTypes = h.types || [];
+
+  // Show/hide Studio button
+  var studioBtn = document.getElementById('studioBtn');
+  if (studioBtn) studioBtn.style.display = h.studioUrl ? '' : 'none';
+}
+
+function openStudio(docId) {
+  var url = state.health && state.health.studioUrl;
+  if (!url) { showToast('No Studio URL configured. Add it in Settings.', 'err'); return; }
+  // If docId provided, try to deep-link to the document
+  if (docId) url += '/intent/edit/id=' + encodeURIComponent(docId);
+  window.open(url, '_blank');
+}
+
+// ============================================================================
+// SIDEBAR
+// ============================================================================
+function renderSidebar() {
+  var h = state.health || {};
+  var types = state.docTypes;
+  var html = '';
+
+  // Home
+  html += '<div class="nav-section">';
+  html += navItem('home', 'Home', iconSvg('home'), null);
+  html += '</div>';
+
+  // Content types
+  if (types.length) {
+    html += '<div class="nav-section"><div class="nav-section-title">Content</div>';
+    for (var i = 0; i < types.length; i++) {
+      var t = types[i];
+      html += navItem('type:' + t.name, displayName(t.name), iconSvg('file-text'), t.count);
+    }
+    html += '</div>';
+  }
+
+  // Assets
+  html += '<div class="nav-section"><div class="nav-section-title">Library</div>';
+  var imgCount = (h.assets && h.assets.images) || 0;
+  var fileCount = (h.assets && h.assets.files) || 0;
+  html += navItem('assets:image', 'Images', iconSvg('image'), imgCount);
+  html += navItem('assets:file', 'Files', iconSvg('paperclip'), fileCount);
+  html += '</div>';
+
+  // Workflow
+  html += '<div class="nav-section"><div class="nav-section-title">Workflow</div>';
+  if (h.draftsCount > 0) {
+    html += navItem('drafts', 'Drafts', iconSvg('edit'), h.draftsCount);
+  }
+  html += '</div>';
+
+  // Studio (when repo is configured)
+  if (h.repoPath) {
+    html += '<div class="nav-section"><div class="nav-section-title">Studio</div>';
+    html += navItem('studio:schemas', 'Schemas', iconSvg('code'), null);
+    html += navItem('studio:components', 'Components', iconSvg('layout'), null);
+    html += '</div>';
+  }
+
+  document.getElementById('sidebar').innerHTML = html;
+
+  // Highlight active
+  highlightNav();
+}
+
+function navItem(slug, label, icon, count) {
+  return '<div class="nav-item" data-slug="' + slug + '" onclick="onNavClick(\'' + slug + '\')">'
+    + '<span class="nav-icon">' + icon + '</span>'
+    + '<span class="nav-label">' + esc(label) + '</span>'
+    + (count !== null && count !== undefined ? '<span class="nav-count">' + count + '</span>' : '')
+    + '</div>';
+}
+
+function highlightNav() {
+  var slug = state.section ? (state.section.slug || '') : '';
+  document.querySelectorAll('.nav-item').forEach(function(el) {
+    el.classList.toggle('active', el.dataset.slug === slug);
+  });
+}
+
+function onNavClick(slug) {
+  if (slug === 'home') {
+    selectSection({ kind: 'home', slug: 'home', label: 'Home' });
+  } else if (slug === 'drafts') {
+    selectSection({ kind: 'drafts', slug: 'drafts', label: 'Drafts' });
+  } else if (slug.startsWith('type:')) {
+    var name = slug.slice(5);
+    var t = state.docTypes.find(function(x) { return x.name === name; });
+    selectSection({ kind: 'type', slug: slug, typeName: name, label: displayName(name), count: t ? t.count : 0 });
+  } else if (slug.startsWith('assets:')) {
+    var assetType = slug.slice(7);
+    selectSection({ kind: 'assets', slug: slug, assetType: assetType, label: assetType === 'image' ? 'Images' : 'Files' });
+  } else if (slug === 'studio:schemas') {
+    selectSection({ kind: 'studio', slug: slug, studioView: 'schemas', label: 'Schemas' });
+  } else if (slug === 'studio:components') {
+    selectSection({ kind: 'studio', slug: slug, studioView: 'components', label: 'Components' });
+  }
+}
+
+// ============================================================================
+// SECTION NAVIGATION
+// ============================================================================
+function selectSection(section) {
+  state.section = section;
+  state.search = '';
+  state.statusFilter = 'all';
+  state.selected = null;
+  var searchInput = document.getElementById('searchInput');
+  if (searchInput) searchInput.value = '';
+  highlightNav();
+  closeDetail();
+
+  // Always show mainView (sidebar lives here), hide editor
+  document.getElementById('mainView').style.display = 'flex';
+  document.getElementById('editorView').classList.remove('active');
+
+  if (section.kind === 'home') {
+    // Show home, hide content+detail columns
+    document.getElementById('homeView').style.display = 'flex';
+    document.getElementById('contentCol').style.display = 'none';
+    document.getElementById('mainView').classList.add('no-detail');
+    renderHome();
+  } else {
+    // Show content column, hide home
+    document.getElementById('homeView').style.display = 'none';
+    document.getElementById('contentCol').style.display = 'flex';
+
+    // Show/hide status filter for content types
+    document.getElementById('statusFilter').style.display = section.kind === 'type' ? '' : 'none';
+
+    loadSection();
+  }
+}
+
+// ============================================================================
+// HOME DASHBOARD
+// ============================================================================
+function renderHome() {
+  var h = state.health;
+  if (!h) {
+    document.getElementById('homeView').innerHTML = '<div class="empty-msg">Could not load project data. Check your connection.</div>';
+    return;
+  }
+
+  var html = '';
+
+  // Header
+  html += '<div class="home-header">';
+  html += '<h1>Dashboard</h1>';
+  html += '<div class="home-subtitle">' + esc(h.projectId) + ' / ' + esc(h.dataset) + '</div>';
+  html += '</div>';
+
+  // Environment bar
+  html += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
+  if (h.studioUrl) {
+    html += '<div style="display:flex;align-items:center;gap:6px;padding:8px 14px;background:var(--surface0);border:1px solid var(--overlay0);border-radius:var(--radius);font-size:12px;cursor:pointer;" onclick="openStudio()">'
+      + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--peach)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>'
+      + '<span>Sanity Studio</span>'
+      + '<span style="font-size:10px;color:var(--subtext0);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(h.studioUrl) + '</span>'
+      + '</div>';
+  }
+  if (h.repoPath) {
+    html += '<div style="display:flex;align-items:center;gap:6px;padding:8px 14px;background:var(--surface0);border:1px solid var(--overlay0);border-radius:var(--radius);font-size:12px;">'
+      + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>'
+      + '<span>Local Repo</span>'
+      + '<span style="font-size:10px;color:var(--subtext0);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(h.repoPath.replace(/\\\\/g, '/').replace(/\\/g, '/')) + '</span>'
+      + '</div>';
+  }
+  if (h.previewUrl) {
+    html += '<div style="display:flex;align-items:center;gap:6px;padding:8px 14px;background:var(--surface0);border:1px solid var(--overlay0);border-radius:var(--radius);font-size:12px;cursor:pointer;" onclick="window.open(\'' + esc(h.previewUrl) + '\',\'_blank\')">'
+      + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>'
+      + '<span>Live Site</span>'
+      + '<span style="font-size:10px;color:var(--subtext0);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(h.previewUrl) + '</span>'
+      + '</div>';
+  }
+  if (!h.studioUrl && !h.repoPath && !h.previewUrl) {
+    html += '<div style="font-size:11px;color:var(--subtext0);padding:8px 0;">No Studio URL, repo, or preview URL configured. Add them in Settings > Plugins > Sanity.</div>';
+  }
+  html += '</div>';
+
+  // Metrics
+  html += '<div class="home-grid">';
+  html += homeCard(h.totalTypes, 'Document Types', 'accent');
+  html += homeCard(h.totalDocuments, 'Total Documents', 'green');
+  html += homeCard(h.draftsCount || 0, 'Drafts', h.draftsCount > 20 ? 'yellow' : 'peach');
+  var totalAssets = ((h.assets && h.assets.images) || 0) + ((h.assets && h.assets.files) || 0);
+  html += homeCard(totalAssets, 'Assets', 'accent');
+  html += '</div>';
+
+  // Quick Actions
+  html += '<div class="home-section-title">Quick Actions</div>';
+  html += '<div class="home-quick-actions">';
+  html += homeAction('Generate Content', 'Create realistic documents using AI', 'aiGenerate');
+  html += homeAction('Run GROQ Query', 'Execute a custom GROQ query', 'aiGroq');
+  html += homeAction('Find Stale Content', 'Documents not updated recently', 'aiStale');
+  html += homeAction('Content Health Audit', 'Check for missing fields and issues', 'aiAudit');
+  html += homeAction('Export & Backup', 'Export all documents of a type', 'aiExport');
+  html += homeAction('Ask AI About Project', 'Get insights about your Sanity project', 'aiAsk');
+  if (h.repoPath) {
+    html += homeAction('Add Schema Type', 'Create a new document or component schema', 'aiAddSchema');
+    html += homeAction('Add Page Component', 'Generate a new page builder component', 'aiAddComponent');
+    html += homeAction('Edit Studio Config', 'Modify plugins, structure, or theme', 'aiEditConfig');
+    html += homeAction('Deploy Studio', 'Build and deploy Sanity Studio', 'aiDeploy');
+  }
+  html += '</div>';
+
+  // Issues
+  if (h.issues && h.issues.length) {
+    html += '<div class="home-section-title">Issues</div>';
+    html += '<div class="home-issues">';
+    for (var i = 0; i < h.issues.length; i++) {
+      var iss = h.issues[i];
+      html += '<div class="home-issue ' + iss.level + '">' + esc(iss.message) + '</div>';
+    }
+    html += '</div>';
+  }
+
+  // Recent Activity
+  if (h.recent && h.recent.length) {
+    html += '<div class="home-section-title">Recent Activity</div>';
+    html += '<div class="home-recent">';
+    for (var i = 0; i < h.recent.length; i++) {
+      var d = h.recent[i];
+      var title = d.title || d.name || d.heading || d._id;
+      html += '<div class="home-recent-item">'
+        + '<span class="home-recent-name">' + esc(title) + '</span>'
+        + '<span class="home-recent-type">' + esc(displayName(d._type)) + '</span>'
+        + '<span class="home-recent-time">' + timeAgo(d._updatedAt) + '</span>'
+        + '</div>';
+    }
+    html += '</div>';
+  }
+
+  document.getElementById('homeView').innerHTML = html;
+
+  // Live Preview -- check if reachable, then render
+  var previewBase = getPreviewUrl();
+  if (previewBase) {
+    api('GET', '/preview-check?url=' + encodeURIComponent(previewBase)).then(function(check) {
+      if (!check || !check.ok) return;
+      // Append preview HTML to home view
+      var homeEl = document.getElementById('homeView');
+      var previewHtml = renderHomePreview();
+      var div = document.createElement('div');
+      div.innerHTML = previewHtml;
+      homeEl.appendChild(div.firstChild);
+
+      homePreviewZoom = 1;
+      requestAnimationFrame(function() {
+        var vp = document.getElementById('homePreviewViewport');
+        if (vp) {
+          var w = vp.clientWidth;
+          if (w > 0) vp.style.height = Math.round(w * 9 / 16) + 'px';
+        }
+        setupHomePreview();
+      });
+    });
+  }
+}
+
+function homeCard(val, label, color) {
+  return '<div class="home-card" onclick="void 0">'
+    + '<div class="hc-val ' + color + '">' + val + '</div>'
+    + '<div class="hc-label">' + label + '</div>'
+    + '</div>';
+}
+
+function homeAction(title, desc, action) {
+  return '<div class="home-action" onclick="homeActionClick(\'' + action + '\')">'
+    + '<div class="ha-title">' + esc(title) + '</div>'
+    + '<div class="ha-desc">' + esc(desc) + '</div>'
+    + '</div>';
+}
+
+function homeActionClick(action) {
+  if (action === 'aiGenerate') {
+    typePickerThenAi('Generate Content', function(t) {
+      DevOpsPilot.askAi('Generate content for Sanity document type "' + t + '".\nFirst discover the schema:\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/summary/' + t + '\n\nAsk how many documents to create, then generate realistic production-quality content matching the discovered fields. Create each via:\ncurl -s -X POST http://127.0.0.1:3800/api/plugins/sanity/documents/' + t + ' -H "Content-Type: application/json" -d \'{"field":"value",...}\'');
+    });
+  } else if (action === 'aiGroq') {
+    askInput({ title: 'Run GROQ Query', label: 'GROQ Query', placeholder: '*[_type == "post"]{title, _id}', multiline: true }).then(function(q) {
+      if (!q) return;
+      DevOpsPilot.askAi('Run this GROQ query on Sanity:\ncurl -s -X POST http://127.0.0.1:3800/api/plugins/sanity/groq -H "Content-Type: application/json" -d \'{"query":"' + q.replace(/\\/g, '\\\\').replace(/'/g, "'\\''").replace(/"/g, '\\"') + '"}\'\n\nFormat the results in a readable table or list.');
+    });
+  } else if (action === 'aiStale') {
+    askInput({ title: 'Find Stale Content', label: 'Stale after how many days?', placeholder: '30', defaultValue: '30' }).then(function(days) {
+      if (!days) return;
+      DevOpsPilot.askAi('Query Sanity for documents not updated in ' + days + ' days:\ncurl -s -X POST http://127.0.0.1:3800/api/plugins/sanity/groq -H "Content-Type: application/json" -d \'{"query":"*[dateTime(_updatedAt) < dateTime(now()) - 60*60*24*' + days + '] | order(_updatedAt asc) [0...100] {_type, _id, title, name, _updatedAt}"}\'\n\nCreate a well-formatted markdown table sorted by staleness.\nSave as a note called "Sanity Stale Content Report" using:\nnode scripts/save-note.js "Sanity Stale Content Report" --file .ai-workspace/stale-report.md');
+    });
+  } else if (action === 'aiAudit') {
+    typePickerThenAi('Content Health Audit', function(t) {
+      DevOpsPilot.askAi('Audit Sanity document type "' + t + '":\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/audit/' + t + '\n\nAlso fetch the full summary:\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/summary/' + t + '\n\nAnalyze content health: missing fields, stale docs, naming inconsistencies, empty fields. Provide actionable recommendations.\nSave as a note.');
+    });
+  } else if (action === 'aiExport') {
+    typePickerThenAi('Export & Backup', function(t) {
+      DevOpsPilot.askAi('Export all documents from Sanity type "' + t + '":\ncurl -s -X POST http://127.0.0.1:3800/api/plugins/sanity/documents/' + t + '/export\n\nSave the exported JSON as a note called "' + t + ' Export [' + new Date().toISOString().split('T')[0] + ']" using:\nnode scripts/save-note.js "' + t + ' Export" --file .ai-workspace/sanity-export.md');
+    });
+  } else if (action === 'aiAsk') {
+    DevOpsPilot.askAi('Get a comprehensive overview of my Sanity project:\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/health\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/summary\n\nGive me insights: document type distribution, content health, recommendations for improvement, and any issues you notice.');
+  } else if (action === 'aiAddSchema') {
+    var h = state.health || {};
+    DevOpsPilot.askAi('I want to add a new Sanity schema type to my project.\n\n'
+      + 'First, understand the existing setup:\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/repo/schemas\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/repo/info\n\n'
+      + 'Read the schema registry to understand the pattern:\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/repo/file/' + encodeURIComponent('src/sanity/schemaTypes/schemaRegistry.ts') + '\n\n'
+      + 'Local repo: ' + (h.repoPath || '') + '\n\n'
+      + 'Ask me what type of schema I want to create (document type, page component, singleton, object type), what fields it needs, then generate the schema file following the existing patterns. Also update the schema registry to include it.');
+  } else if (action === 'aiAddComponent') {
+    var h = state.health || {};
+    DevOpsPilot.askAi('I want to add a new page builder component to my Sanity project.\n\n'
+      + 'First, understand the existing components:\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/repo/components\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/repo/schemas\n\n'
+      + 'Read an existing component to understand the pattern (both schema and frontend):\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/repo/file/' + encodeURIComponent('src/components/PageBuilder/components/BrutalistHero/BrutalistHero.tsx') + '\n\n'
+      + 'Read the component schemas import file:\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/repo/file/' + encodeURIComponent('src/sanity/schemaTypes/componentSchemas.ts') + '\n\n'
+      + 'Local repo: ' + (h.repoPath || '') + '\n\n'
+      + 'Ask me what component I want to create, then generate both the schema file and the React component file following the existing patterns. Also register it in componentSchemas.ts.');
+  } else if (action === 'aiEditConfig') {
+    var h = state.health || {};
+    DevOpsPilot.askAi('I want to modify my Sanity Studio configuration.\n\n'
+      + 'Read the current config:\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/repo/file/' + encodeURIComponent('sanity.config.ts') + '\n\n'
+      + 'Read the desk structure:\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/repo/file/' + encodeURIComponent('src/sanity/structure.ts') + '\n\n'
+      + 'Read package.json for current plugins:\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/repo/file/' + encodeURIComponent('package.json') + '\n\n'
+      + 'Local repo: ' + (h.repoPath || '') + '\n\n'
+      + 'Ask me what I want to change -- add plugins, modify the sidebar structure, change the theme, add custom document views, etc.');
+  } else if (action === 'aiDeploy') {
+    var h = state.health || {};
+    DevOpsPilot.askAi('I want to deploy my Sanity Studio.\n\n'
+      + 'Check the project setup:\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/repo/info\n\n'
+      + 'Read the CLI config:\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/repo/file/' + encodeURIComponent('sanity.cli.ts') + '\n\n'
+      + 'Local repo: ' + (h.repoPath || '') + '\n\n'
+      + 'Check if this is an embedded studio (Next.js) or standalone. For embedded, deploy happens with the Next.js app (Netlify/Vercel). For standalone, use `npx sanity deploy`. Guide me through the deployment process.');
+  }
+}
+
+function typePickerThenAi(title, cb) {
+  var types = state.docTypes;
+  if (!types.length) { showToast('No document types found', 'err'); return; }
+  var opts = types.map(function(t) { return { value: t.name, label: displayName(t.name) + ' (' + t.count + ')' }; });
+  askSelect({ title: title, label: 'Which document type?', options: opts }).then(function(v) {
+    if (v) cb(v);
+  });
+}
+
+// ============================================================================
+// LOAD SECTION DATA
+// ============================================================================
+var _searchTimer = null;
+function onSearch() {
+  clearTimeout(_searchTimer);
+  _searchTimer = setTimeout(function() {
+    state.search = document.getElementById('searchInput').value.trim().toLowerCase();
+    renderList();
+  }, 250);
+}
+
+function onStatusFilter() {
+  state.statusFilter = document.getElementById('statusFilter').value;
+  renderList();
+}
+
+async function loadSection() {
+  var sec = state.section;
+  if (!sec) return;
+
+  // Show skeleton
+  var cont = document.getElementById('listContainer');
+  cont.innerHTML = skeletonHtml(12);
+
+  if (sec.kind === 'type') {
+    var docs = await api('GET', '/documents/' + sec.typeName + '?limit=200');
+    state.items = (Array.isArray(docs) ? docs : []);
+  } else if (sec.kind === 'assets') {
+    var r = await api('GET', '/assets?type=' + sec.assetType + '&limit=200');
+    state.items = (r && r.assets) || [];
+  } else if (sec.kind === 'drafts') {
+    var drafts = await api('GET', '/drafts?limit=200');
+    state.items = Array.isArray(drafts) ? drafts : [];
+  } else if (sec.kind === 'studio') {
+    if (sec.studioView === 'schemas') {
+      var schemas = await api('GET', '/repo/schemas');
+      state.items = Array.isArray(schemas) ? schemas : [];
+    } else if (sec.studioView === 'components') {
+      var comps = await api('GET', '/repo/components');
+      state.items = Array.isArray(comps) ? comps : [];
+    }
+  }
+
+  renderList();
+}
+
+// ============================================================================
+// RENDER LIST / GRID
+// ============================================================================
+function renderList() {
+  var sec = state.section;
+  var items = state.items;
+  var q = state.search;
+  var cont = document.getElementById('listContainer');
+
+  // Filter by search
+  if (q) {
+    items = items.filter(function(d) {
+      var title = (d.title || d.name || d.heading || d.originalFilename || d._id || '').toLowerCase();
+      return title.indexOf(q) !== -1;
+    });
+  }
+
+  // Filter by status (for document types)
+  if (sec.kind === 'type' && state.statusFilter !== 'all') {
+    items = items.filter(function(d) {
+      var isDraft = d._id.startsWith('drafts.');
+      if (state.statusFilter === 'draft') return isDraft;
+      if (state.statusFilter === 'published') return !isDraft;
+      return true;
+    });
+  }
+
+  document.getElementById('listCount').textContent = items.length + (state.items.length !== items.length ? ' / ' + state.items.length : '');
+
+  // Render based on section kind
+  if (sec.kind === 'assets' && sec.assetType === 'image') {
+    renderMediaGrid(items, cont);
+  } else if (sec.kind === 'assets') {
+    renderFileList(items, cont);
+  } else if (sec.kind === 'studio') {
+    renderStudioFileList(items, cont, sec.studioView);
+  } else {
+    renderDocList(items, cont);
+  }
+}
+
+function renderDocList(items, cont) {
+  if (!items.length) { cont.innerHTML = '<div class="empty-msg">No documents found</div>'; return; }
+  var html = '';
+  for (var i = 0; i < items.length; i++) {
+    var d = items[i];
+    var title = d.title || d.name || d.heading || d._id;
+    var isDraft = d._id.startsWith('drafts.');
+    var statusClass = isDraft ? 'draft' : 'published';
+    var sel = state.selected && state.selected._id === d._id ? ' selected' : '';
+    html += '<div class="row' + sel + '" data-id="' + esc(d._id) + '" onclick="openItem(\'' + esc(d._id) + '\')">'
+      + '<span class="status-dot ' + statusClass + '"></span>'
+      + '<div class="row-body">'
+      + '<div class="row-title">' + esc(title) + '</div>'
+      + '<div class="row-meta">' + esc(d._type || '') + ' - ' + timeAgo(d._updatedAt) + '</div>'
+      + '</div>'
+      + '<span class="row-badge ' + statusClass + '">' + (isDraft ? 'draft' : 'published') + '</span>'
+      + '</div>';
+  }
+  cont.innerHTML = html;
+}
+
+function renderMediaGrid(items, cont) {
+  if (!items.length) { cont.innerHTML = '<div class="empty-msg">No images found</div>'; return; }
+  cont.innerHTML = '';
+  var grid = document.createElement('div');
+  grid.className = 'media-grid';
+  for (var i = 0; i < items.length; i++) {
+    var a = items[i];
+    var card = document.createElement('div');
+    card.className = 'media-card' + (state.selected && state.selected._id === a._id ? ' selected' : '');
+    card.dataset.id = a._id;
+    card.onclick = (function(id) { return function() { openAsset(id); }; })(a._id);
+    if (a.url) {
+      var img = document.createElement('img');
+      img.src = a.url + '?w=200&h=200&fit=crop';
+      img.loading = 'lazy';
+      card.appendChild(img);
+    }
+    var label = document.createElement('div');
+    label.className = 'media-label';
+    label.textContent = a.originalFilename || a._id;
+    card.appendChild(label);
+    grid.appendChild(card);
+  }
+  cont.appendChild(grid);
+}
+
+function renderFileList(items, cont) {
+  if (!items.length) { cont.innerHTML = '<div class="empty-msg">No files found</div>'; return; }
+  var html = '';
+  for (var i = 0; i < items.length; i++) {
+    var a = items[i];
+    var name = a.originalFilename || a._id;
+    var ext = (a.mimeType || '').split('/').pop() || '?';
+    var size = a.size ? formatBytes(a.size) : '';
+    html += '<div class="row" onclick="openAsset(\'' + esc(a._id) + '\')">'
+      + '<div class="row-body">'
+      + '<div class="row-title">' + esc(name) + '</div>'
+      + '<div class="row-meta">' + esc(ext.toUpperCase()) + (size ? ' - ' + size : '') + ' - ' + timeAgo(a._updatedAt) + '</div>'
+      + '</div>'
+      + '</div>';
+  }
+  cont.innerHTML = html;
+}
+
+function renderStudioFileList(items, cont, view) {
+  if (!items.length) {
+    cont.innerHTML = '<div class="empty-msg">No ' + (view === 'schemas' ? 'schema' : 'component') + ' files found.<br>Make sure the Local Repo is set in Settings.</div>';
+    return;
+  }
+  var html = '';
+  for (var i = 0; i < items.length; i++) {
+    var f = items[i];
+    var ext = f.name.split('.').pop() || '';
+    html += '<div class="row" data-id="' + esc(f.relativePath) + '" onclick="openStudioFile(\'' + esc(f.relativePath).replace(/'/g, "\\'") + '\')">'
+      + '<div class="row-body">'
+      + '<div class="row-title">' + esc(f.name) + '</div>'
+      + '<div class="row-meta">' + esc(f.relativePath) + '</div>'
+      + '</div>'
+      + '<span class="row-badge">' + esc(ext.toUpperCase()) + '</span>'
+      + '</div>';
+  }
+  cont.innerHTML = html;
+}
+
+var studioFileEditor = null; // Monaco instance for studio file detail panel
+
+async function openStudioFile(relPath) {
+  var r = await api('GET', '/repo/file/' + encodeURIComponent(relPath));
+  if (r.error) { showToast('Could not read file: ' + r.error, 'err'); return; }
+
+  state.selected = { _id: relPath, _type: 'file', relativePath: relPath, content: r.content, path: r.path };
+  openDetail();
+
+  // Highlight
+  document.querySelectorAll('.row').forEach(function(el) { el.classList.remove('selected'); });
+  var clicked = document.querySelector('.row[data-id="' + CSS.escape(relPath) + '"]');
+  if (clicked) clicked.classList.add('selected');
+
+  var fileName = relPath.split('/').pop();
+  document.getElementById('detailTitle').textContent = fileName;
+  document.getElementById('detailSubtitle').textContent = relPath;
+
+  // Tabs: Code + Info
+  document.getElementById('detailTabs').innerHTML =
+    '<div class="tab active" data-tab="content" onclick="switchTab(\'content\')">Code</div>'
+    + '<div class="tab" data-tab="meta" onclick="switchTab(\'meta\')">Info</div>';
+
+  // Code panel -- Monaco editor inline
+  var ext = fileName.split('.').pop() || 'ts';
+  var lang = ext === 'ts' || ext === 'tsx' ? 'typescript' : ext === 'js' || ext === 'jsx' ? 'javascript' : ext;
+  // Make the tab panel fill all available height for the editor
+  var panelContent = document.getElementById('panelContent');
+  panelContent.style.display = 'flex';
+  panelContent.style.flexDirection = 'column';
+  panelContent.style.flex = '1';
+  panelContent.innerHTML = '<div id="studioFileEditorContainer" style="flex:1;min-height:0;"></div>';
+  // Also make the detail body a flex column so the panel can stretch
+  var detailBody = document.getElementById('detailBody');
+  detailBody.style.display = 'flex';
+  detailBody.style.flexDirection = 'column';
+  detailBody.style.padding = '0';
+
+  // Info panel
+  document.getElementById('panelMeta').innerHTML =
+    '<div class="field"><label class="field-label">Path</label><div class="field-readonly">' + esc(r.path) + '</div></div>'
+    + '<div class="field"><label class="field-label">Relative Path</label><div class="field-readonly">' + esc(relPath) + '</div></div>'
+    + '<div class="field"><label class="field-label">Size</label><div class="field-readonly">' + formatBytes(r.content.length) + '</div></div>';
+
+  // Clear refs panel and preview
+  document.getElementById('panelReferences').innerHTML = '';
+  var wrap = document.getElementById('detailPreviewWrap');
+  if (wrap) { wrap.classList.remove('active'); wrap.innerHTML = ''; }
+
+  // Actions
+  document.getElementById('detailActions').innerHTML =
+    '<button class="btn primary sm" onclick="openStudioFileInFilesTab()">Edit</button>'
+    + '<button class="btn sm" onclick="aiEditStudioFile()">Edit with AI</button>'
+    + '<button class="btn sm" onclick="aiAnalyzeStudioFile()">Analyze</button>'
+    + '<span class="spacer"></span>';
+
+  switchTab('content');
+
+  // Mount Monaco into the detail panel
+  await ensureMonaco();
+  if (studioFileEditor) { studioFileEditor.dispose(); studioFileEditor = null; }
+  var container = document.getElementById('studioFileEditorContainer');
+  if (!container) return;
+  studioFileEditor = monaco.editor.create(container, {
+    value: r.content, language: lang, theme: 'devops-pilot',
+    fontSize: 13, fontFamily: "'Cascadia Code','Cascadia Mono',Consolas,'Courier New',monospace",
+    minimap: { enabled: false }, scrollBeyondLastLine: false, wordWrap: 'off',
+    automaticLayout: true, lineNumbers: 'on', renderWhitespace: 'selection',
+    bracketPairColorization: { enabled: true }, smoothScrolling: true,
+    cursorBlinking: 'smooth', padding: { top: 8 }, tabSize: 2,
+    readOnly: true,
+  });
+}
+
+function openStudioFileInFilesTab() {
+  var sel = state.selected;
+  if (!sel || !sel.relativePath) return;
+  var h = state.health || {};
+  // Find the repo name for this path
+  fetch('/api/repos').then(function(r) { return r.json(); }).then(function(repos) {
+    var repoPath = (h.repoPath || '').replace(/\\\\/g, '/').replace(/\\/g, '/').replace(/\/+$/, '');
+    var repoName = null;
+    for (var name in repos) {
+      var rp = repos[name].replace(/\\\\/g, '/').replace(/\\/g, '/').replace(/\/+$/, '');
+      if (rp === repoPath) { repoName = name; break; }
+    }
+    if (!repoName) { showToast('Repo not found in DevOps Pilot repos', 'err'); return; }
+    fetch('/api/ui/view-file', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ repo: repoName, path: sel.relativePath }),
+    });
+  });
+}
+
+function aiEditStudioFile() {
+  var sel = state.selected;
+  if (!sel || !sel.relativePath) return;
+  var h = state.health || {};
+  DevOpsPilot.askAi('I want to edit this Sanity ' + (state.section.studioView === 'schemas' ? 'schema' : 'component') + ' file.\n\n'
+    + 'Read the file:\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/repo/file/' + encodeURIComponent(sel.relativePath) + '\n\n'
+    + 'The local repo is at: ' + (h.repoPath || '') + '\n'
+    + 'File: ' + sel.relativePath + '\n\n'
+    + 'Show me the current structure and ask what I want to change (add fields, rename, change validation, add new component type, etc.).');
+}
+
+function aiAnalyzeStudioFile() {
+  var sel = state.selected;
+  if (!sel || !sel.relativePath) return;
+  var h = state.health || {};
+  DevOpsPilot.askAi('Analyze this Sanity ' + (state.section.studioView === 'schemas' ? 'schema' : 'component') + ' file.\n\n'
+    + 'Read the file:\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/repo/file/' + encodeURIComponent(sel.relativePath) + '\n\n'
+    + 'Also check what content exists for this type:\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/summary\n\n'
+    + 'Explain the schema structure, field types, validation rules, and suggest improvements or missing fields.');
+}
+
+// ============================================================================
+// DETAIL PANEL
+// ============================================================================
+function openDetail() {
+  document.getElementById('mainView').classList.remove('no-detail');
+  document.getElementById('detailPanel').style.display = 'flex';
+}
+
+function closeDetail() {
+  document.getElementById('mainView').classList.add('no-detail');
+  document.getElementById('detailPanel').style.display = 'none';
+  // Clear preview
+  var wrap = document.getElementById('detailPreviewWrap');
+  if (wrap) { wrap.classList.remove('active'); wrap.innerHTML = ''; }
+  // Dispose studio file editor if open
+  if (studioFileEditor) { studioFileEditor.dispose(); studioFileEditor = null; }
+  state.selected = null;
+  // Remove selection highlight
+  document.querySelectorAll('.row.selected, .media-card.selected').forEach(function(el) { el.classList.remove('selected'); });
+}
+
+function switchTab(tab) {
+  document.querySelectorAll('#detailTabs .tab').forEach(function(el) {
+    el.classList.toggle('active', el.dataset.tab === tab);
+  });
+  document.querySelectorAll('.detail-body .tab-panel').forEach(function(el) {
+    el.classList.toggle('active', el.id === 'panel' + tab.charAt(0).toUpperCase() + tab.slice(1));
+  });
+}
+
+// ============================================================================
+// OPEN DOCUMENT ITEM
+// ============================================================================
+async function openItem(id) {
+  var sec = state.section;
+
+  // Reset detail body styles (may have been changed by studio file view)
+  var detailBody = document.getElementById('detailBody');
+  detailBody.style.display = '';
+  detailBody.style.flexDirection = '';
+  detailBody.style.padding = '';
+  var panelContent = document.getElementById('panelContent');
+  panelContent.style.display = '';
+  panelContent.style.flexDirection = '';
+  panelContent.style.flex = '';
+
+  // Find in cached items
+  var doc = state.items.find(function(d) { return d._id === id; });
+
+  // If not cached, try to fetch by type
+  if (!doc) {
+    var docType = sec.kind === 'type' ? sec.typeName : null;
+    if (docType) {
+      doc = await api('GET', '/documents/' + docType + '/' + id);
+    }
+  }
+  if (!doc || doc.error) { showToast('Document not found', 'err'); return; }
+
+  state.selected = doc;
+  openDetail();
+
+  // Highlight in list
+  document.querySelectorAll('.row, .media-card').forEach(function(el) { el.classList.remove('selected'); });
+  var clicked = document.querySelector('.row[data-id="' + CSS.escape(id) + '"]');
+  if (clicked) clicked.classList.add('selected');
+
+  var title = doc.title || doc.name || doc.heading || doc._id;
+  var isDraft = doc._id.startsWith('drafts.');
+  document.getElementById('detailTitle').textContent = title;
+  document.getElementById('detailSubtitle').textContent = (isDraft ? 'DRAFT - ' : '') + (doc._type || '') + ' - ' + doc._id;
+
+  // Show correct tabs
+  document.getElementById('detailTabs').innerHTML =
+    '<div class="tab active" data-tab="content" onclick="switchTab(\'content\')">Content</div>'
+    + '<div class="tab" data-tab="references" onclick="switchTab(\'references\')">References</div>'
+    + '<div class="tab" data-tab="meta" onclick="switchTab(\'meta\')">Meta</div>';
+
+  // Content tab - smart form
+  renderContentTab(doc);
+
+  // References tab (lazy load)
+  document.getElementById('panelReferences').innerHTML = '<div class="empty-msg">Loading references...</div>';
+  loadReferences(doc._type, doc._id);
+
+  // Meta tab
+  renderMetaTab(doc);
+
+  // Actions
+  renderActions(doc);
+
+  // Preview (if preview URL configured and doc has a slug)
+  renderDetailPreview(doc);
+
+  switchTab('content');
+}
+
+// Queue for pending RTE mounts (populated by renderField, consumed after innerHTML)
+var _pendingRte = [];
+
+function renderContentTab(doc) {
+  var panel = document.getElementById('panelContent');
+  var html = '';
+
+  // Clear previous RTE instances and pending queue
+  activeRteInstances = [];
+  _pendingRte = [];
+
+  // Discover editable fields (skip internal _ fields)
+  var fields = Object.keys(doc).filter(function(k) { return !k.startsWith('_'); }).sort();
+
+  if (!fields.length) {
+    html = '<div class="empty-msg">No editable fields found</div>';
+    panel.innerHTML = html;
+    return;
+  }
+
+  for (var i = 0; i < fields.length; i++) {
+    var k = fields[i];
+    var val = doc[k];
+    html += renderField(k, val, 'field_' + k);
+  }
+
+  panel.innerHTML = html;
+
+  // Temporarily open all component cards so Quill can mount (needs visible container)
+  var cards = panel.querySelectorAll('.component-card');
+  cards.forEach(function(c) { c.classList.add('open'); });
+
+  // Mount all queued Quill RTEs (works for top-level AND nested component fields)
+  for (var r = 0; r < _pendingRte.length; r++) {
+    var rte = _pendingRte[r];
+    var el = document.getElementById(rte.id);
+    if (el) mountRichEditor(el, rte.html, rte.fieldKey);
+  }
+  _pendingRte = [];
+
+  // Collapse component cards back (leave first one open for UX)
+  cards.forEach(function(c, i) { if (i > 0) c.classList.remove('open'); });
+}
+
+function renderField(key, val, inputId) {
+  var label = '<label class="field-label">' + esc(displayName(key)) + '</label>';
+
+  // Null / undefined
+  if (val === null || val === undefined) {
+    return '<div class="field">' + label
+      + '<input class="field-input" id="' + inputId + '" type="text" value="" placeholder="(empty)">'
+      + '</div>';
+  }
+
+  // Boolean
+  if (typeof val === 'boolean') {
+    return '<div class="field">' + label
+      + '<select class="field-input" id="' + inputId + '">'
+      + '<option value="true"' + (val ? ' selected' : '') + '>true</option>'
+      + '<option value="false"' + (!val ? ' selected' : '') + '>false</option>'
+      + '</select></div>';
+  }
+
+  // Number
+  if (typeof val === 'number') {
+    return '<div class="field">' + label
+      + '<input class="field-input" id="' + inputId + '" type="number" value="' + val + '">'
+      + '</div>';
+  }
+
+  // String
+  if (typeof val === 'string') {
+    // HTML content -- use rich text editor
+    if (val.indexOf('<') !== -1 && val.match(/<[a-z][\s\S]*>/i)) {
+      _pendingRte.push({ id: inputId + '_rte', html: val, fieldKey: key, type: 'html' });
+      return '<div class="field">' + label
+        + '<div id="' + inputId + '_rte" data-rte-mount="true"></div>'
+        + '</div>';
+    }
+    // Long strings get textarea
+    if (val.length > 100 || val.indexOf('\n') !== -1) {
+      return '<div class="field">' + label
+        + '<textarea class="field-input" id="' + inputId + '" rows="4">' + esc(val) + '</textarea>'
+        + '</div>';
+    }
+    // URL
+    if (val.match(/^https?:\/\//)) {
+      return '<div class="field">' + label
+        + '<input class="field-input" id="' + inputId + '" type="url" value="' + esc(val) + '">'
+        + '</div>';
+    }
+    // Date
+    if (val.match(/^\d{4}-\d{2}-\d{2}/)) {
+      return '<div class="field">' + label
+        + '<input class="field-input" id="' + inputId + '" type="text" value="' + esc(val) + '">'
+        + '<div class="field-hint">Date</div>'
+        + '</div>';
+    }
+    return '<div class="field">' + label
+      + '<input class="field-input" id="' + inputId + '" type="text" value="' + esc(val) + '">'
+      + '</div>';
+  }
+
+  // Reference
+  if (typeof val === 'object' && val._ref) {
+    return '<div class="field">' + label
+      + '<div class="field-readonly">' + esc(val._ref) + '</div>'
+      + '<div class="field-hint">Reference</div>'
+      + '</div>';
+  }
+
+  // Slug
+  if (typeof val === 'object' && val._type === 'slug' && val.current !== undefined) {
+    return '<div class="field">' + label
+      + '<input class="field-input" id="' + inputId + '" type="text" value="' + esc(val.current) + '"'
+      + ' data-slug="true">'
+      + '<div class="field-hint">Slug</div>'
+      + '</div>';
+  }
+
+  // Image with asset ref -- show thumbnail
+  if (typeof val === 'object' && val._type === 'image' && val.asset && val.asset._ref) {
+    var imgUrl = sanityImageUrl(val.asset._ref);
+    var html = '<div class="field">' + label;
+    if (imgUrl) html += '<img class="field-image-preview" src="' + esc(imgUrl) + '?w=400&h=250&fit=max" loading="lazy">';
+    html += '<div class="field-readonly" style="font-size:10px;">' + esc(val.asset._ref) + '</div>';
+    html += '<div class="field-hint">Image -- edit in JSON editor to change</div></div>';
+    return html;
+  }
+
+  // Portable Text (block content array) -- render as rich text editor
+  if (Array.isArray(val) && val.length > 0 && val[0] && val[0]._type === 'block') {
+    var ptHtml = portableTextToHtml(val);
+    _pendingRte.push({ id: inputId + '_rte', html: ptHtml, fieldKey: key, type: 'pt' });
+    return '<div class="field">' + label
+      + '<div id="' + inputId + '_rte" data-rte-mount="true"></div>'
+      + '<div class="field-hint">Portable Text (' + val.length + ' blocks) -- visual editor for content.</div>'
+      + '</div>';
+  }
+
+  // Typed component array (components, items with _type + _key)
+  if (Array.isArray(val) && val.length > 0 && val[0] && val[0]._type && val[0]._key) {
+    return '<div class="field">' + label
+      + '<div class="component-list">' + renderComponentArray(val, inputId) + '</div>'
+      + '<div class="field-hint">' + val.length + ' component(s) -- click to expand and edit fields</div>'
+      + '</div>';
+  }
+
+  // Simple object array (links, stats, items with known simple keys)
+  if (Array.isArray(val) && val.length > 0 && val[0] && typeof val[0] === 'object' && !val[0]._type) {
+    return renderSimpleObjectArray(key, val, inputId, label);
+  }
+
+  // Link-like array (objects with label + url)
+  if (Array.isArray(val) && val.length > 0 && val[0] && val[0].label !== undefined && val[0].url !== undefined) {
+    return renderLinkArray(val, inputId, label);
+  }
+
+  // Generic array
+  if (Array.isArray(val)) {
+    if (val.length === 0) {
+      return '<div class="field">' + label + '<div class="field-readonly">(empty list)</div></div>';
+    }
+    // Simple value arrays (strings, numbers)
+    if (typeof val[0] !== 'object') {
+      return '<div class="field">' + label
+        + '<input class="field-input" id="' + inputId + '" type="text" value="' + esc(val.join(', ')) + '" data-csv="true">'
+        + '<div class="field-hint">List (' + val.length + ' items) -- comma separated</div>'
+        + '</div>';
+    }
+    // Fallback for complex arrays
+    var json = JSON.stringify(val, null, 2);
+    return '<div class="field">' + label
+      + '<textarea class="field-input mono" id="' + inputId + '" rows="' + Math.min(8, json.split('\n').length + 1) + '" data-json="true">' + esc(json) + '</textarea>'
+      + '<div class="field-hint">Array (' + val.length + ' items)</div>'
+      + '</div>';
+  }
+
+  // Generic object
+  if (typeof val === 'object') {
+    var json = JSON.stringify(val, null, 2);
+    return '<div class="field">' + label
+      + '<textarea class="field-input mono" id="' + inputId + '" rows="' + Math.min(6, json.split('\n').length + 1) + '" data-json="true">' + esc(json) + '</textarea>'
+      + '<div class="field-hint">Object</div>'
+      + '</div>';
+  }
+
+  return '<div class="field">' + label
+    + '<input class="field-input" id="' + inputId + '" type="text" value="' + esc(String(val)) + '">'
+    + '</div>';
+}
+
+// -- Portable Text to HTML --
+function portableTextToHtml(blocks) {
+  var html = '';
+  for (var i = 0; i < blocks.length; i++) {
+    var b = blocks[i];
+    if (b._type !== 'block') {
+      html += '<p><em>[' + esc(b._type || 'unknown') + ']</em></p>';
+      continue;
+    }
+    var text = '';
+    if (b.children) {
+      for (var j = 0; j < b.children.length; j++) {
+        var c = b.children[j];
+        var t = esc(c.text || '');
+        if (c.marks && c.marks.indexOf('strong') !== -1) t = '<strong>' + t + '</strong>';
+        if (c.marks && c.marks.indexOf('em') !== -1) t = '<em>' + t + '</em>';
+        text += t;
+      }
+    }
+    var style = b.style || 'normal';
+    if (style === 'h1') html += '<h2>' + text + '</h2>';
+    else if (style === 'h2') html += '<h2>' + text + '</h2>';
+    else if (style === 'h3') html += '<h3>' + text + '</h3>';
+    else if (style === 'h4') html += '<h4>' + text + '</h4>';
+    else if (style === 'blockquote') html += '<blockquote>' + text + '</blockquote>';
+    else html += '<p>' + text + '</p>';
+  }
+  return html || '<em>(empty)</em>';
+}
+
+// -- Render typed component array (collapsible cards) --
+function renderComponentArray(items, parentId) {
+  var html = '';
+  for (var i = 0; i < items.length; i++) {
+    var comp = items[i];
+    var cardId = parentId + '_c' + i;
+    var typeName = comp._type || 'unknown';
+    // Find a title-like field for the card header
+    var title = comp.headline || comp.title || comp.heading || comp.label || comp.name || '';
+    if (!title && comp.content && typeof comp.content === 'string') title = comp.content.substring(0, 40) + '...';
+    if (!title) title = '#' + (i + 1);
+
+    html += '<div class="component-card" id="' + cardId + '">';
+    html += '<div class="component-header" onclick="document.getElementById(\'' + cardId + '\').classList.toggle(\'open\')">';
+    html += '<span class="component-arrow">&#9654;</span>';
+    html += '<span class="component-type-badge">' + esc(displayName(typeName)) + '</span>';
+    html += '<span class="component-title">' + esc(title) + '</span>';
+    html += '</div>';
+    html += '<div class="component-body">';
+
+    // Render each field of the component (skip internal _ fields)
+    var keys = Object.keys(comp).filter(function(k) { return k !== '_type' && k !== '_key'; }).sort();
+    for (var j = 0; j < keys.length; j++) {
+      var k = keys[j];
+      html += renderField(k, comp[k], parentId + '_c' + i + '_' + k);
+    }
+    html += '</div></div>';
+  }
+  return html;
+}
+
+// -- Render link-like arrays (label + url pairs) --
+function renderLinkArray(items, inputId, label) {
+  var html = '<div class="field">' + label + '<div class="component-list">';
+  for (var i = 0; i < items.length; i++) {
+    var link = items[i];
+    html += '<div class="link-row">';
+    html += '<span class="link-label">' + esc(link.label || '') + '</span>';
+    html += '<span class="link-url">' + esc(link.url || '') + '</span>';
+    html += '</div>';
+  }
+  html += '</div><div class="field-hint">' + items.length + ' link(s) -- use JSON editor to add/remove</div></div>';
+  return html;
+}
+
+// -- Render simple object arrays (like stats) --
+function renderSimpleObjectArray(key, items, inputId, label) {
+  // Check if items have label+url pattern (links)
+  if (items[0].label !== undefined && items[0].url !== undefined) {
+    return renderLinkArray(items, inputId, label);
+  }
+  // Render as compact cards
+  var html = '<div class="field">' + label + '<div class="component-list">';
+  for (var i = 0; i < items.length; i++) {
+    var item = items[i];
+    var cardId = inputId + '_i' + i;
+    var itemTitle = item.label || item.title || item.name || '#' + (i + 1);
+    html += '<div class="component-card" id="' + cardId + '">';
+    html += '<div class="component-header" onclick="document.getElementById(\'' + cardId + '\').classList.toggle(\'open\')">';
+    html += '<span class="component-arrow">&#9654;</span>';
+    html += '<span class="component-title">' + esc(itemTitle) + '</span>';
+    html += '</div><div class="component-body">';
+    var keys = Object.keys(item).filter(function(k) { return k !== '_key'; });
+    for (var j = 0; j < keys.length; j++) {
+      var k = keys[j];
+      html += renderField(k, item[k], cardId + '_' + k);
+    }
+    html += '</div></div>';
+  }
+  html += '</div><div class="field-hint">' + items.length + ' item(s)</div></div>';
+  return html;
+}
+
+// -- Build Sanity CDN image URL from asset ref --
+function sanityImageUrl(ref) {
+  if (!ref) return '';
+  // ref format: image-{hash}-{dimensions}-{format}
+  var m = ref.match(/^image-([a-f0-9]+)-(\d+x\d+)-(\w+)$/);
+  if (!m) return '';
+  var cfg = { projectId: '', dataset: '' };
+  // Use the active project info from state
+  if (state.health) { cfg.projectId = state.health.projectId; cfg.dataset = state.health.dataset; }
+  if (!cfg.projectId) return '';
+  return 'https://cdn.sanity.io/images/' + cfg.projectId + '/' + cfg.dataset + '/' + m[1] + '-' + m[2] + '.' + m[3];
+}
+
+async function loadReferences(docType, docId) {
+  var r = await api('GET', '/documents/' + docType + '/' + docId + '/references');
+  if (r.error) {
+    document.getElementById('panelReferences').innerHTML = '<div class="empty-msg">Could not load references</div>';
+    return;
+  }
+
+  var html = '';
+  var incoming = r.incoming || [];
+  var outgoing = r.outgoing || [];
+
+  html += '<div style="margin-bottom:16px;">';
+  html += '<div class="field-label" style="margin-bottom:8px;">Incoming (' + incoming.length + ')</div>';
+  if (!incoming.length) {
+    html += '<div style="font-size:12px;color:var(--subtext0);padding:4px 0;">No documents reference this one</div>';
+  }
+  for (var i = 0; i < incoming.length; i++) {
+    var ref = incoming[i];
+    html += '<div class="ref-item">'
+      + '<span class="ref-dot in"></span>'
+      + '<span class="ref-title">' + esc(ref.title || ref.name || ref.heading || ref._id) + '</span>'
+      + '<span class="ref-type">' + esc(ref._type) + '</span>'
+      + '</div>';
+  }
+  html += '</div>';
+
+  html += '<div>';
+  html += '<div class="field-label" style="margin-bottom:8px;">Outgoing (' + outgoing.length + ')</div>';
+  if (!outgoing.length) {
+    html += '<div style="font-size:12px;color:var(--subtext0);padding:4px 0;">No outgoing references</div>';
+  }
+  for (var i = 0; i < outgoing.length; i++) {
+    var ref = outgoing[i];
+    html += '<div class="ref-item">'
+      + '<span class="ref-dot out"></span>'
+      + '<span class="ref-title">' + esc(ref.title || ref._ref) + '</span>'
+      + '<span class="ref-type">' + esc(ref.resolvedType || ref._type || 'ref') + '</span>'
+      + '</div>';
+  }
+  html += '</div>';
+
+  document.getElementById('panelReferences').innerHTML = html;
+}
+
+function renderMetaTab(doc) {
+  var html = '';
+  html += '<div class="field"><label class="field-label">ID</label><div class="field-readonly">' + esc(doc._id) + '</div></div>';
+  html += '<div class="field"><label class="field-label">Type</label><div class="field-readonly">' + esc(doc._type) + '</div></div>';
+  if (doc._createdAt) html += '<div class="field"><label class="field-label">Created</label><div class="field-readonly">' + esc(new Date(doc._createdAt).toLocaleString()) + '</div></div>';
+  if (doc._updatedAt) html += '<div class="field"><label class="field-label">Last Updated</label><div class="field-readonly">' + esc(new Date(doc._updatedAt).toLocaleString()) + '</div></div>';
+  if (doc._rev) html += '<div class="field"><label class="field-label">Revision</label><div class="field-readonly">' + esc(doc._rev) + '</div></div>';
+
+  html += '<div style="margin-top:20px;">';
+  html += '<button class="btn sm" onclick="openJsonEditor()">Open in JSON Editor</button>';
+  html += '</div>';
+
+  document.getElementById('panelMeta').innerHTML = html;
+}
+
+function renderActions(doc) {
+  var isDraft = doc._id.startsWith('drafts.');
+  var html = '';
+
+  html += '<button class="btn primary sm" onclick="saveDocument()">Save</button>';
+  if (isDraft) {
+    html += '<button class="btn sm" onclick="publishDraft()">Publish</button>';
+    html += '<button class="btn sm danger" onclick="discardDraft()">Discard Draft</button>';
+  }
+  html += '<button class="btn sm" onclick="askAiAboutDoc()">Ask AI</button>';
+  html += '<button class="btn sm" onclick="openJsonEditor()">JSON</button>';
+  if (state.health && state.health.studioUrl) {
+    html += '<button class="btn sm" onclick="openStudio(\'' + esc(doc._id) + '\')">Studio</button>';
+  }
+  html += '<span class="spacer"></span>';
+  html += '<button class="btn sm danger" onclick="deleteDocument()">Delete</button>';
+
+  document.getElementById('detailActions').innerHTML = html;
+}
+
+// ============================================================================
+// DOCUMENT ACTIONS
+// ============================================================================
+async function saveDocument() {
+  var doc = state.selected;
+  if (!doc) return;
+
+  var sec = state.section;
+  var docType = doc._type;
+  var patchData = {};
+
+  // Collect rich text editor values first
+  for (var r = 0; r < activeRteInstances.length; r++) {
+    var rte = activeRteInstances[r];
+    if (!rte.fieldKey) continue;
+    var origVal = doc[rte.fieldKey];
+    if (typeof origVal === 'string') {
+      // HTML string field -- save the HTML directly
+      patchData[rte.fieldKey] = rte.getHtml();
+    }
+    // For Portable Text we don't convert back -- that requires a full HTML-to-PT converter.
+    // Users must use the JSON editor for structural PT changes.
+  }
+
+  // Collect form field values -- only for fields that have editable inputs
+  var fields = Object.keys(doc).filter(function(k) { return !k.startsWith('_'); });
+  for (var i = 0; i < fields.length; i++) {
+    var k = fields[i];
+    var el = document.getElementById('field_' + k);
+    if (!el) continue; // Skip fields without form inputs (components, portable text, etc.)
+
+    var origVal = doc[k];
+
+    if (el.dataset.slug === 'true') {
+      patchData[k] = { _type: 'slug', current: el.value };
+    } else if (el.dataset.csv === 'true') {
+      patchData[k] = el.value.split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+    } else if (el.dataset.json === 'true') {
+      try { patchData[k] = JSON.parse(el.value); }
+      catch (e) { showToast('Invalid JSON in field "' + k + '"', 'err'); return; }
+    } else if (el.tagName === 'SELECT' && (origVal === true || origVal === false)) {
+      patchData[k] = el.value === 'true';
+    } else if (typeof origVal === 'number') {
+      patchData[k] = Number(el.value);
+    } else {
+      patchData[k] = el.value;
+    }
+  }
+
+  var r = await api('PATCH', '/documents/' + docType + '/' + doc._id, patchData);
+  if (r.error) {
+    showToast('Save failed: ' + r.error, 'err');
+    return;
+  }
+
+  showToast('Saved', 'ok');
+
+  // Reload
+  await loadSection();
+}
+
+async function publishDraft() {
+  var doc = state.selected;
+  if (!doc || !doc._id.startsWith('drafts.')) return;
+
+  var ok = await askConfirm({ title: 'Publish Draft', message: 'This will publish the draft and make it live. Continue?', confirmText: 'Publish' });
+  if (!ok) return;
+
+  var r = await api('POST', '/drafts/' + encodeURIComponent(doc._id) + '/publish');
+  if (r.error) { showToast('Publish failed: ' + r.error, 'err'); return; }
+
+  showToast('Published', 'ok');
+  closeDetail();
+  await loadHealth();
+  renderSidebar();
+  await loadSection();
+}
+
+async function discardDraft() {
+  var doc = state.selected;
+  if (!doc || !doc._id.startsWith('drafts.')) return;
+
+  var ok = await askConfirm({ title: 'Discard Draft', message: 'This will permanently delete this draft. Continue?', confirmText: 'Discard', danger: true });
+  if (!ok) return;
+
+  var r = await api('POST', '/drafts/' + encodeURIComponent(doc._id) + '/discard');
+  if (r.error) { showToast('Discard failed: ' + r.error, 'err'); return; }
+
+  showToast('Draft discarded', 'ok');
+  closeDetail();
+  await loadHealth();
+  renderSidebar();
+  await loadSection();
+}
+
+async function deleteDocument() {
+  var doc = state.selected;
+  if (!doc) return;
+
+  var ok = await askConfirm({ title: 'Delete Document', message: 'This will permanently delete "' + (doc.title || doc.name || doc._id) + '". This cannot be undone.', confirmText: 'Delete', danger: true });
+  if (!ok) return;
+
+  var r = await api('DELETE', '/documents/' + doc._type + '/' + doc._id);
+  if (r.error) { showToast('Delete failed: ' + r.error, 'err'); return; }
+
+  showToast('Deleted', 'ok');
+  closeDetail();
+  await loadHealth();
+  renderSidebar();
+  await loadSection();
+}
+
+function askAiAboutDoc() {
+  var doc = state.selected;
+  if (!doc) return;
+  var title = doc.title || doc.name || doc.heading || doc._id;
+  DevOpsPilot.askAi('Fetch this Sanity document:\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/documents/' + doc._type + '/' + doc._id + '\n\nThis is "' + title + '" (type: ' + doc._type + '). Show me a readable summary and ask what I want to do -- edit fields, duplicate, translate, or analyze content quality.');
+}
+
+// ============================================================================
+// ASSET DETAIL
+// ============================================================================
+async function openAsset(id) {
+  // Reset detail body styles
+  var detailBody = document.getElementById('detailBody');
+  detailBody.style.display = '';
+  detailBody.style.flexDirection = '';
+  detailBody.style.padding = '';
+  var panelContent = document.getElementById('panelContent');
+  panelContent.style.display = '';
+  panelContent.style.flexDirection = '';
+  panelContent.style.flex = '';
+
+  var asset = state.items.find(function(a) { return a._id === id; });
+  if (!asset) return;
+
+  state.selected = asset;
+  openDetail();
+
+  // Highlight
+  document.querySelectorAll('.media-card, .row').forEach(function(el) { el.classList.remove('selected'); });
+  document.querySelectorAll('.media-card').forEach(function(el) {
+    if (el.dataset.id === id) el.classList.add('selected');
+  });
+
+  var name = asset.originalFilename || asset._id;
+  document.getElementById('detailTitle').textContent = name;
+  document.getElementById('detailSubtitle').textContent = (asset.mimeType || '') + (asset.size ? ' - ' + formatBytes(asset.size) : '');
+
+  // Tabs: Details + Usage
+  document.getElementById('detailTabs').innerHTML =
+    '<div class="tab active" data-tab="content" onclick="switchTab(\'content\')">Details</div>'
+    + '<div class="tab" data-tab="references" onclick="switchTab(\'references\')">Usage</div>'
+    + '<div class="tab" data-tab="meta" onclick="switchTab(\'meta\')">Meta</div>';
+
+  // Details panel
+  var html = '';
+  if (asset._type === 'sanity.imageAsset' && asset.url) {
+    html += '<div style="margin-bottom:14px;border-radius:var(--radius);overflow:hidden;background:var(--surface0);">';
+    html += '<img src="' + esc(asset.url) + '?w=600&h=400&fit=max" style="width:100%;display:block;">';
+    html += '</div>';
+  }
+  html += '<div class="field"><label class="field-label">Filename</label><div class="field-readonly">' + esc(name) + '</div></div>';
+  if (asset.url) html += '<div class="field"><label class="field-label">URL</label><div class="field-readonly" style="font-size:10px;word-break:break-all;">' + esc(asset.url) + '</div></div>';
+  if (asset.mimeType) html += '<div class="field"><label class="field-label">MIME Type</label><div class="field-readonly">' + esc(asset.mimeType) + '</div></div>';
+  if (asset.size) html += '<div class="field"><label class="field-label">Size</label><div class="field-readonly">' + formatBytes(asset.size) + '</div></div>';
+  if (asset.metadata && asset.metadata.dimensions) {
+    var dim = asset.metadata.dimensions;
+    html += '<div class="field"><label class="field-label">Dimensions</label><div class="field-readonly">' + dim.width + ' x ' + dim.height + '</div></div>';
+  }
+  document.getElementById('panelContent').innerHTML = html;
+
+  // Usage panel (lazy)
+  document.getElementById('panelReferences').innerHTML = '<div class="empty-msg">Loading usage...</div>';
+  var usage = await api('GET', '/assets/' + encodeURIComponent(id) + '/usage');
+  if (Array.isArray(usage) && usage.length) {
+    var uhtml = '<div class="field-label" style="margin-bottom:8px;">Used by ' + usage.length + ' document(s)</div>';
+    for (var i = 0; i < usage.length; i++) {
+      var u = usage[i];
+      uhtml += '<div class="ref-item">'
+        + '<span class="ref-dot in"></span>'
+        + '<span class="ref-title">' + esc(u.title || u.name || u.heading || u._id) + '</span>'
+        + '<span class="ref-type">' + esc(u._type) + '</span>'
+        + '</div>';
+    }
+    document.getElementById('panelReferences').innerHTML = uhtml;
+  } else {
+    document.getElementById('panelReferences').innerHTML = '<div class="empty-msg">Not used by any documents</div>';
+  }
+
+  // Meta panel
+  var mhtml = '';
+  mhtml += '<div class="field"><label class="field-label">ID</label><div class="field-readonly">' + esc(asset._id) + '</div></div>';
+  if (asset._createdAt) mhtml += '<div class="field"><label class="field-label">Uploaded</label><div class="field-readonly">' + esc(new Date(asset._createdAt).toLocaleString()) + '</div></div>';
+  if (asset._updatedAt) mhtml += '<div class="field"><label class="field-label">Last Updated</label><div class="field-readonly">' + esc(new Date(asset._updatedAt).toLocaleString()) + '</div></div>';
+  document.getElementById('panelMeta').innerHTML = mhtml;
+
+  // Actions
+  var actHtml = '';
+  if (asset.url) actHtml += '<button class="btn sm" onclick="copyAssetUrl()">Copy URL</button>';
+  actHtml += '<button class="btn sm" onclick="aiAssetAction()">AI Describe</button>';
+  actHtml += '<span class="spacer"></span>';
+  document.getElementById('detailActions').innerHTML = actHtml;
+
+  switchTab('content');
+}
+
+function copyAssetUrl() {
+  if (!state.selected || !state.selected.url) return;
+  navigator.clipboard.writeText(state.selected.url).then(function() { showToast('URL copied', 'ok'); });
+}
+
+function aiAssetAction() {
+  var a = state.selected;
+  if (!a) return;
+  DevOpsPilot.askAi('Check this Sanity asset:\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/assets/' + encodeURIComponent(a._id) + '/usage\n\nAsset: ' + (a.originalFilename || a._id) + '\nURL: ' + (a.url || 'N/A') + '\nMIME: ' + (a.mimeType || 'unknown') + '\n\nTell me: which documents use this asset? Is it orphaned? Suggest alt text if it is an image.');
+}
+
+// ============================================================================
+// RICH TEXT EDITOR (Quill 2 + code view + fullscreen)
+// ============================================================================
+var activeRteInstances = []; // track all mounted RTEs so we can collect their values on save
+
+function mountRichEditor(mountEl, initialHtml, fieldKey) {
+  mountEl.innerHTML = '';
+  var wrap = document.createElement('div');
+  wrap.className = 'rte-wrap';
+
+  // Extra toolbar
+  var extra = document.createElement('div');
+  extra.className = 'rte-toolbar-extra';
+  extra.innerHTML =
+    '<button type="button" data-act="code" title="Toggle HTML source">'
+    + '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>'
+    + ' Code</button>'
+    + '<button type="button" data-act="fullscreen" title="Fullscreen">'
+    + '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>'
+    + ' Fullscreen</button>';
+  wrap.appendChild(extra);
+
+  var editorEl = document.createElement('div');
+  wrap.appendChild(editorEl);
+
+  var codeEl = document.createElement('textarea');
+  codeEl.className = 'rte-code-view';
+  codeEl.spellcheck = false;
+  wrap.appendChild(codeEl);
+  mountEl.appendChild(wrap);
+
+  var toolbarOptions = [
+    [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
+    ['bold', 'italic', 'underline', 'strike'],
+    [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+    [{ 'align': [] }],
+    ['blockquote', 'code-block'],
+    ['link', 'image'],
+    ['clean']
+  ];
+  var quill = new Quill(editorEl, {
+    theme: 'snow',
+    modules: { toolbar: toolbarOptions },
+    placeholder: 'Write content...',
+  });
+  try { quill.clipboard.dangerouslyPasteHTML(initialHtml || ''); } catch (_) {}
+
+  // Code toggle
+  extra.querySelector('[data-act="code"]').addEventListener('click', function(e) {
+    e.preventDefault();
+    var btn = e.currentTarget;
+    if (wrap.classList.contains('code-view')) {
+      try { quill.clipboard.dangerouslyPasteHTML(codeEl.value); } catch (_) {}
+      wrap.classList.remove('code-view');
+      btn.classList.remove('active');
+    } else {
+      codeEl.value = formatHtml(quill.root.innerHTML);
+      wrap.classList.add('code-view');
+      btn.classList.add('active');
+      codeEl.focus();
+    }
+  });
+
+  // Fullscreen toggle
+  extra.querySelector('[data-act="fullscreen"]').addEventListener('click', function(e) {
+    e.preventDefault();
+    wrap.classList.toggle('fullscreen');
+    e.currentTarget.classList.toggle('active');
+  });
+
+  var rte = {
+    fieldKey: fieldKey,
+    getHtml: function() {
+      if (wrap.classList.contains('code-view')) return codeEl.value;
+      return quill.root.innerHTML;
+    },
+    setHtml: function(html) {
+      try { quill.clipboard.dangerouslyPasteHTML(html || ''); } catch (_) {}
+      codeEl.value = formatHtml(html || '');
+    },
+    quill: quill,
+    wrap: wrap,
+  };
+  activeRteInstances.push(rte);
+  return rte;
+}
+
+function formatHtml(html) {
+  // Simple HTML formatter for code view
+  if (!html) return '';
+  return html
+    .replace(/></g, '>\n<')
+    .replace(/\n{3,}/g, '\n\n');
+}
+
+// ============================================================================
+// PREVIEW PANEL
+// ============================================================================
+var detailPreviewZoom = 1;
+var homePreviewZoom = 1;
+var PREVIEW_BASE_WIDTH = 1280;
+
+function getPreviewUrl() {
+  return (state.health && state.health.previewUrl) || '';
+}
+
+function getDocSlug(doc) {
+  if (!doc) return '';
+  if (doc.slug && typeof doc.slug === 'object' && doc.slug.current) return '/' + doc.slug.current;
+  if (doc.slug && typeof doc.slug === 'string') return '/' + doc.slug;
+  return '';
+}
+
+function buildPageUrl(doc) {
+  var base = getPreviewUrl();
+  if (!base) return '';
+  var slug = getDocSlug(doc);
+  // Only build a preview URL if the document has a slug -- singletons like
+  // header/footer have no page URL and shouldn't show a preview
+  if (!slug) return '';
+  return base + slug;
+}
+
+async function renderDetailPreview(doc) {
+  var wrap = document.getElementById('detailPreviewWrap');
+  var pageUrl = buildPageUrl(doc);
+  if (!pageUrl) { wrap.classList.remove('active'); wrap.innerHTML = ''; return; }
+
+  // Check if the URL is reachable before showing preview
+  try {
+    var check = await api('GET', '/preview-check?url=' + encodeURIComponent(pageUrl));
+    if (!check.ok) { wrap.classList.remove('active'); wrap.innerHTML = ''; return; }
+  } catch (_) { wrap.classList.remove('active'); wrap.innerHTML = ''; return; }
+
+  wrap.innerHTML =
+    '<div class="preview-section-header">'
+    + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>'
+    + ' Preview'
+    + '<span class="spacer"></span>'
+    + '<button class="btn-mini" onclick="adjustDetailZoom(-0.1)" title="Zoom out"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg></button>'
+    + '<span class="preview-zoom-label" id="previewZoomLabel">100%</span>'
+    + '<button class="btn-mini" onclick="adjustDetailZoom(0.1)" title="Zoom in"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg></button>'
+    + '<button class="btn-mini" onclick="reloadDetailPreview()" title="Reload"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button>'
+    + '<button class="btn-mini" onclick="window.open(\'' + esc(pageUrl) + '\',\'_blank\')" title="Open in browser"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></button>'
+    + '</div>'
+    + '<div class="preview-viewport loading" id="previewViewport">'
+    + '<iframe id="previewFrame" referrerpolicy="no-referrer"></iframe>'
+    + '</div>';
+  wrap.classList.add('active');
+  detailPreviewZoom = 1;
+  setupDetailPreview(pageUrl);
+}
+
+function setupDetailPreview(pageUrl) {
+  requestAnimationFrame(function() {
+    var vp = document.getElementById('previewViewport');
+    var frame = document.getElementById('previewFrame');
+    if (!vp || !frame) return;
+    // Set 16:9 height before loading
+    var w = vp.clientWidth;
+    if (w > 0) vp.style.height = Math.round(w * 9 / 16) + 'px';
+    vp.classList.add('loading');
+    frame.onload = function() { vp.classList.remove('loading'); scaleDetailPreview(); };
+    frame.onerror = function() { vp.classList.remove('loading'); };
+    frame.src = pageUrl;
+  });
+}
+
+function reloadDetailPreview() {
+  var doc = state.selected;
+  if (!doc) return;
+  var pageUrl = buildPageUrl(doc);
+  if (pageUrl) setupDetailPreview(pageUrl);
+}
+
+function scaleDetailPreview() {
+  var vp = document.getElementById('previewViewport');
+  var frame = document.getElementById('previewFrame');
+  if (!vp) return;
+  var w = vp.clientWidth;
+  if (w > 0) vp.style.height = Math.round(w * 9 / 16) + 'px';
+  applyPreviewScale(vp, frame, detailPreviewZoom);
+  var label = document.getElementById('previewZoomLabel');
+  if (label) label.textContent = Math.round(detailPreviewZoom * 100) + '%';
+}
+
+function adjustDetailZoom(delta) {
+  detailPreviewZoom = Math.max(0.4, Math.min(3, Math.round((detailPreviewZoom + delta) * 100) / 100));
+  scaleDetailPreview();
+}
+
+function applyPreviewScale(vp, frame, zoom) {
+  if (!vp || !frame) return;
+  var vpWidth = vp.clientWidth;
+  var vpHeight = vp.clientHeight;
+  if (vpWidth <= 0 || vpHeight <= 0) return;
+  if (zoom === 1) {
+    // At 1x, fill the container naturally -- no transform needed
+    frame.style.width = '100%';
+    frame.style.height = '100%';
+    frame.style.transform = 'none';
+  } else {
+    // Simulate a different device width via scale transform
+    var frameWidth = Math.max(280, Math.round(PREVIEW_BASE_WIDTH / zoom));
+    var scale = vpWidth / frameWidth;
+    var frameHeight = Math.ceil(vpHeight / scale);
+    frame.style.width = frameWidth + 'px';
+    frame.style.height = frameHeight + 'px';
+    frame.style.transform = 'scale(' + scale + ')';
+    frame.style.transformOrigin = '0 0';
+  }
+}
+
+function renderHomePreview() {
+  var base = getPreviewUrl();
+  if (!base) return '';
+  return '<div class="home-preview">'
+    + '<div class="home-preview-header">'
+    + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>'
+    + ' Live Preview'
+    + '<span class="spacer"></span>'
+    + '<button class="btn-mini" onclick="adjustHomeZoom(-0.1)" title="Zoom out"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg></button>'
+    + '<span class="preview-zoom-label" id="homeZoomLabel">100%</span>'
+    + '<button class="btn-mini" onclick="adjustHomeZoom(0.1)" title="Zoom in"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg></button>'
+    + '<button class="btn-mini" onclick="reloadHomePreview()" title="Reload"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button>'
+    + '<button class="btn-mini" onclick="window.open(\'' + esc(base) + '\',\'_blank\')" title="Open in browser"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></button>'
+    + '</div>'
+    + '<div class="home-preview-viewport loading" id="homePreviewViewport">'
+    + '<iframe id="homePreviewFrame" referrerpolicy="no-referrer"></iframe>'
+    + '</div>'
+    + '</div>';
+}
+
+function setupHomePreview() {
+  var base = getPreviewUrl();
+  if (!base) return;
+  var vp = document.getElementById('homePreviewViewport');
+  var frame = document.getElementById('homePreviewFrame');
+  if (!vp || !frame) return;
+  vp.classList.add('loading');
+  // Load directly for full CSS/JS fidelity
+  frame.onload = function() { vp.classList.remove('loading'); scaleHomePreview(); };
+  frame.onerror = function() { vp.classList.remove('loading'); };
+  frame.src = base;
+}
+
+function reloadHomePreview() { setupHomePreview(); }
+
+function scaleHomePreview() {
+  var vp = document.getElementById('homePreviewViewport');
+  var frame = document.getElementById('homePreviewFrame');
+  if (!vp) return;
+  // Enforce 16:9 based on actual width
+  var w = vp.clientWidth;
+  if (w > 0) vp.style.height = Math.round(w * 9 / 16) + 'px';
+  applyPreviewScale(vp, frame, homePreviewZoom);
+  var label = document.getElementById('homeZoomLabel');
+  if (label) label.textContent = Math.round(homePreviewZoom * 100) + '%';
+}
+
+function adjustHomeZoom(delta) {
+  homePreviewZoom = Math.max(0.4, Math.min(3, Math.round((homePreviewZoom + delta) * 100) / 100));
+  scaleHomePreview();
+}
+
+// ============================================================================
+// JSON EDITOR (Monaco)
+// ============================================================================
+var monacoEditor = null, monacoReady = false, editorCtx = null;
+
+function openJsonEditor() {
+  var doc = state.selected;
+  if (!doc) return;
+  editorCtx = { docType: doc._type, docId: doc._id, doc: doc };
+
+  document.getElementById('mainView').style.display = 'none';
+  document.getElementById('editorView').classList.add('active');
+
+  var title = doc.title || doc.name || doc.heading || doc._id;
+  document.getElementById('editorTitle').textContent = title;
+  document.getElementById('editorPath').textContent = doc._type + '/' + doc._id;
+  document.getElementById('editorStatus').textContent = 'Loading...';
+
+  var editDoc = Object.assign({}, doc);
+  delete editDoc._rev;
+  var content = JSON.stringify(editDoc, null, 2);
+
+  ensureMonaco().then(function() {
+    var container = document.getElementById('editorContainer');
+    if (monacoEditor) { monacoEditor.dispose(); monacoEditor = null; }
+    monacoEditor = monaco.editor.create(container, {
+      value: content, language: 'json', theme: 'devops-pilot',
+      fontSize: 13, fontFamily: "'Cascadia Code','Cascadia Mono',Consolas,'Courier New',monospace",
+      minimap: { enabled: true }, scrollBeyondLastLine: false, wordWrap: 'off',
+      automaticLayout: true, lineNumbers: 'on', renderWhitespace: 'selection',
+      bracketPairColorization: { enabled: true }, smoothScrolling: true,
+      cursorBlinking: 'smooth', padding: { top: 8 }, tabSize: 2, formatOnPaste: true,
+    });
+    monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, function() { saveEditor(); });
+    document.getElementById('editorStatus').textContent = 'Ready';
+  });
+}
+
+function closeEditor() {
+  document.getElementById('editorView').classList.remove('active');
+  document.getElementById('mainView').style.display = 'flex';
+}
+
+async function saveEditor() {
+  if (!monacoEditor || !editorCtx) return;
+  var raw = monacoEditor.getValue();
+  var parsed;
+  try { parsed = JSON.parse(raw); }
+  catch (e) {
+    document.getElementById('editorStatus').innerHTML = '<span class="err-text">Invalid JSON: ' + esc(e.message) + '</span>';
+    return;
+  }
+  document.getElementById('editorStatus').textContent = 'Saving...';
+
+  var patchData = {};
+  for (var k in parsed) {
+    if (k === '_id' || k === '_type' || k === '_createdAt' || k === '_updatedAt' || k === '_rev') continue;
+    patchData[k] = parsed[k];
+  }
+
+  var r = await api('PATCH', '/documents/' + editorCtx.docType + '/' + editorCtx.docId, patchData);
+  if (r.error) {
+    document.getElementById('editorStatus').innerHTML = '<span class="err-text">Error: ' + esc(r.error) + '</span>';
+  } else {
+    document.getElementById('editorStatus').textContent = 'Saved';
+    showToast('Document updated', 'ok');
+    await loadSection();
+  }
+}
+
+function ensureMonaco() {
+  if (monacoReady) return Promise.resolve();
+  return new Promise(function(resolve) {
+    var s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.2/min/vs/loader.min.js';
+    s.onload = function() {
+      require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.2/min/vs' } });
+      require(['vs/editor/editor.main'], function() {
+        monacoReady = true;
+        var cs = getComputedStyle(document.documentElement);
+        monaco.editor.defineTheme('devops-pilot', {
+          base: 'vs-dark', inherit: true, rules: [],
+          colors: {
+            'editor.background': cs.getPropertyValue('--crust').trim(),
+            'editor.lineHighlightBackground': cs.getPropertyValue('--surface0').trim(),
+            'editorLineNumber.foreground': cs.getPropertyValue('--overlay0').trim(),
+          }
+        });
+        resolve();
+      });
+    };
+    document.head.appendChild(s);
+  });
+}
+
+// ============================================================================
+// MODAL SYSTEM
+// ============================================================================
+function askInput(opts) {
+  return new Promise(function(resolve) {
+    var root = document.getElementById('modalRoot');
+    var isMulti = opts.multiline;
+    var inputHtml = isMulti
+      ? '<textarea class="field-input" id="modalInput" rows="4" placeholder="' + esc(opts.placeholder || '') + '">' + esc(opts.defaultValue || '') + '</textarea>'
+      : '<input class="field-input" id="modalInput" type="text" value="' + esc(opts.defaultValue || '') + '" placeholder="' + esc(opts.placeholder || '') + '">';
+
+    root.innerHTML = '<div class="modal-overlay" onclick="if(event.target===this)document.getElementById(\'modalRoot\').innerHTML=\'\'">'
+      + '<div class="modal">'
+      + '<div class="modal-header">' + esc(opts.title || 'Input') + '</div>'
+      + '<div class="modal-body">'
+      + '<label class="field-label">' + esc(opts.label || '') + '</label>'
+      + inputHtml
+      + '</div>'
+      + '<div class="modal-actions">'
+      + '<button class="btn" id="modalCancel">Cancel</button>'
+      + '<button class="btn primary" id="modalOk">' + esc(opts.confirmText || 'OK') + '</button>'
+      + '</div></div></div>';
+
+    document.getElementById('modalInput').focus();
+    document.getElementById('modalCancel').onclick = function() { root.innerHTML = ''; resolve(null); };
+    document.getElementById('modalOk').onclick = function() { var v = document.getElementById('modalInput').value; root.innerHTML = ''; resolve(v); };
+    if (!isMulti) {
+      document.getElementById('modalInput').onkeydown = function(e) { if (e.key === 'Enter') { document.getElementById('modalOk').click(); } };
+    }
+  });
+}
+
+function askConfirm(opts) {
+  return new Promise(function(resolve) {
+    var root = document.getElementById('modalRoot');
+    root.innerHTML = '<div class="modal-overlay">'
+      + '<div class="modal">'
+      + '<div class="modal-header">' + esc(opts.title || 'Confirm') + '</div>'
+      + '<div class="modal-body"><p style="margin:0;font-size:13px;">' + esc(opts.message || '') + '</p></div>'
+      + '<div class="modal-actions">'
+      + '<button class="btn" id="modalCancel">Cancel</button>'
+      + '<button class="btn ' + (opts.danger ? 'danger' : 'primary') + '" id="modalOk">' + esc(opts.confirmText || 'OK') + '</button>'
+      + '</div></div></div>';
+    document.getElementById('modalCancel').onclick = function() { root.innerHTML = ''; resolve(false); };
+    document.getElementById('modalOk').onclick = function() { root.innerHTML = ''; resolve(true); };
+  });
+}
+
+function askSelect(opts) {
+  return new Promise(function(resolve) {
+    var root = document.getElementById('modalRoot');
+    var optHtml = (opts.options || []).map(function(o) {
+      return '<option value="' + esc(o.value) + '">' + esc(o.label) + '</option>';
+    }).join('');
+
+    root.innerHTML = '<div class="modal-overlay" onclick="if(event.target===this)document.getElementById(\'modalRoot\').innerHTML=\'\'">'
+      + '<div class="modal">'
+      + '<div class="modal-header">' + esc(opts.title || 'Select') + '</div>'
+      + '<div class="modal-body">'
+      + '<label class="field-label">' + esc(opts.label || '') + '</label>'
+      + '<select class="field-input" id="modalSelect">' + optHtml + '</select>'
+      + '</div>'
+      + '<div class="modal-actions">'
+      + '<button class="btn" id="modalCancel">Cancel</button>'
+      + '<button class="btn primary" id="modalOk">OK</button>'
+      + '</div></div></div>';
+    document.getElementById('modalCancel').onclick = function() { root.innerHTML = ''; resolve(null); };
+    document.getElementById('modalOk').onclick = function() { var v = document.getElementById('modalSelect').value; root.innerHTML = ''; resolve(v); };
+  });
+}
+
+// ============================================================================
+// TOAST
+// ============================================================================
+function showToast(msg, level) {
+  var existing = document.querySelector('.toast');
+  if (existing) existing.remove();
+  var el = document.createElement('div');
+  el.className = 'toast' + (level ? ' ' + level : '');
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(function() { el.remove(); }, 3000);
+}
+
+// ============================================================================
+// HELPERS
+// ============================================================================
+async function api(m, p, b) {
+  try {
+    var o = { method: m, headers: { 'Content-Type': 'application/json' } };
+    if (b) o.body = JSON.stringify(b);
+    var r = await fetch(API + p, o);
+    return await r.json();
+  } catch (e) { return { error: e.message }; }
+}
+
+function esc(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+function displayName(n) {
+  return (n || '').split(/[-_]/).map(function(w) { return w.charAt(0).toUpperCase() + w.slice(1); }).join(' ');
+}
+
+function timeAgo(ts) {
+  if (!ts) return '';
+  var d = Date.now() - new Date(ts).getTime(), m = Math.floor(d / 60000);
+  if (m < 1) return 'now';
+  if (m < 60) return m + 'm ago';
+  var h = Math.floor(m / 60);
+  if (h < 24) return h + 'h ago';
+  var dy = Math.floor(h / 24);
+  if (dy < 30) return dy + 'd ago';
+  return new Date(ts).toLocaleDateString();
+}
+
+function formatBytes(bytes) {
+  if (!bytes) return '0 B';
+  var k = 1024, sizes = ['B', 'KB', 'MB', 'GB'];
+  var i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
+function skeletonHtml(n) {
+  var html = '<div class="skeleton">';
+  for (var i = 0; i < n; i++) html += '<div class="skeleton-row"></div>';
+  return html + '</div>';
+}
+
+function iconSvg(name) {
+  var icons = {
+    'home': '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>',
+    'file-text': '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>',
+    'image': '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>',
+    'paperclip': '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>',
+    'edit': '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>',
+    'code': '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>',
+    'layout': '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>',
+  };
+  return icons[name] || '';
+}
+
+// ============================================================================
+// EVENT LISTENERS
+// ============================================================================
+DevOpsPilot.on('tabActivated', function(d) {
+  if (d.tab && d.tab.indexOf('sanity') !== -1) refresh();
+});
+
+window.addEventListener('resize', function() {
+  if (state.section && state.section.kind === 'home') scaleHomePreview();
+  if (state.selected) scaleDetailPreview();
+});
+
+window.addEventListener('message', function(e) {
+  if (!e.data || !e.data.__devopsPilot) return;
+  if (e.data.type === 'configChanged' && e.data.plugin === 'sanity') {
+    loadProjectSelector().then(function() { init(); });
+  }
+  if (e.data.type === 'openType' && e.data.docType) {
+    var typeName = e.data.docType;
+    var t = state.docTypes.find(function(x) { return x.name === typeName; });
+    selectSection({ kind: 'type', slug: 'type:' + typeName, typeName: typeName, label: displayName(typeName), count: t ? t.count : 0 });
+  }
+});
+
+// ============================================================================
+// BOOT
+// ============================================================================
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,37 @@
+{
+  "id": "sanity",
+  "name": "Sanity",
+  "version": "1.0.0",
+  "description": "Manage Sanity.io datasets, document types, and documents with AI-powered actions",
+  "icon": "database",
+  "tint": "242, 77, 52",
+  "instructions": "instructions.md",
+  "aiKeywords": [
+    "sanity",
+    "sanity.io",
+    "sanity studio",
+    "sanity cms",
+    "groq",
+    "groq query",
+    "sanity document",
+    "sanity schema",
+    "sanity dataset",
+    "portable text",
+    "sanity project",
+    "content lake"
+  ],
+  "activationConditions": { "always": true },
+  "settings": [],
+  "contributions": {
+    "settingsHtml": "settings.html",
+    "centerTabs": [
+      {
+        "id": "manager",
+        "label": "Sanity",
+        "icon": "database",
+        "html": "tab.html"
+      }
+    ],
+    "routes": "routes.js"
+  }
+}
