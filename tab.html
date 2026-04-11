@@ -504,6 +504,11 @@
   <span class="conn-dot" id="connDot"></span>
   <select class="project-select" id="projectSelect" onchange="switchProject(this.value)"></select>
   <span class="spacer"></span>
+  <select class="space-select" id="envSelect" style="display:none;max-width:120px;" onchange="switchEnv(this.value)">
+    <option value="production">Production</option>
+    <option value="staging">Staging</option>
+    <option value="local">Local</option>
+  </select>
   <button class="btn sm" id="studioBtn" style="display:none;" onclick="openStudio()">Open Studio</button>
   <button class="btn sm" onclick="refresh()">Refresh</button>
 </div>
@@ -712,6 +717,20 @@ async function loadHealth() {
   // Show/hide Studio button
   var studioBtn = document.getElementById('studioBtn');
   if (studioBtn) studioBtn.style.display = h.studioUrl ? '' : 'none';
+
+  // Show/hide env selector
+  var envSelect = document.getElementById('envSelect');
+  if (envSelect) {
+    var hasEnvs = h.prodUrl || h.stagingUrl || h.localPort;
+    envSelect.style.display = hasEnvs ? '' : 'none';
+    envSelect.value = h.activeEnv || 'production';
+  }
+}
+
+async function switchEnv(env) {
+  await api('POST', '/env', { env: env });
+  await loadHealth();
+  if (state.section && state.section.kind === 'home') renderHome();
 }
 
 function openStudio(docId) {

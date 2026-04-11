@@ -62,6 +62,25 @@ function isConfigured(cfg) {
   return !!(cfg.projectId && cfg.dataset && cfg.apiToken);
 }
 
+function resolvePreviewUrl(cfg) {
+  // Compute preview URL from environment fields, falling back to legacy previewUrl
+  var env = cfg.activeEnv || 'production';
+  if (env === 'local' && cfg.localPort) return 'http://localhost:' + cfg.localPort;
+  if (env === 'staging' && cfg.stagingUrl) return cfg.stagingUrl;
+  if (cfg.prodUrl) return cfg.prodUrl;
+  return cfg.previewUrl || '';
+}
+
+function getEnvFields(p) {
+  return {
+    prodUrl: p.prodUrl || p.previewUrl || '',
+    stagingUrl: p.stagingUrl || '',
+    localPort: p.localPort || '',
+    activeEnv: p.activeEnv || 'production',
+    previewUrl: resolvePreviewUrl(p),
+  };
+}
+
 function sanityUrl(cfg, endpoint) {
   return `https://${cfg.projectId}.api.sanity.io/v${API_VERSION}/${endpoint}`;
 }
@@ -138,7 +157,7 @@ module.exports = function ({ addPrefixRoute, json, readBody }) {
           projectId: cfg.projectId || '',
           dataset: cfg.dataset || '',
           apiTokenSet: !!cfg.apiToken,
-          previewUrl: cfg.previewUrl || '',
+          ...getEnvFields(cfg),
           repoPath: cfg.repoPath || '',
           studioUrl: cfg.studioUrl || '',
         });
@@ -167,7 +186,7 @@ module.exports = function ({ addPrefixRoute, json, readBody }) {
             projectId: p.projectId,
             dataset: p.dataset,
             apiTokenSet: !!p.apiToken,
-            previewUrl: p.previewUrl || '',
+            ...getEnvFields(p),
             repoPath: p.repoPath || '',
             studioUrl: p.studioUrl || '',
           })),
@@ -190,7 +209,10 @@ module.exports = function ({ addPrefixRoute, json, readBody }) {
           projectId: String(body.projectId).trim(),
           dataset: String(body.dataset).trim(),
           apiToken: String(body.apiToken),
-          previewUrl: body.previewUrl ? String(body.previewUrl).trim().replace(/\/+$/, '') : '',
+          prodUrl: body.prodUrl ? String(body.prodUrl).trim().replace(/\/+$/, '') : '',
+          stagingUrl: body.stagingUrl ? String(body.stagingUrl).trim().replace(/\/+$/, '') : '',
+          localPort: body.localPort ? String(body.localPort).trim() : '',
+          activeEnv: 'production',
           repoPath: body.repoPath ? String(body.repoPath).trim().replace(/\/+$/, '') : '',
           studioUrl: body.studioUrl ? String(body.studioUrl).trim().replace(/\/+$/, '') : '',
         });
@@ -227,7 +249,10 @@ module.exports = function ({ addPrefixRoute, json, readBody }) {
         if (body.projectId !== undefined) all.projects[idx].projectId = String(body.projectId).trim();
         if (body.dataset !== undefined) all.projects[idx].dataset = String(body.dataset).trim();
         if (body.apiToken !== undefined) all.projects[idx].apiToken = String(body.apiToken);
-        if (body.previewUrl !== undefined) all.projects[idx].previewUrl = String(body.previewUrl).trim().replace(/\/+$/, '');
+        if (body.prodUrl !== undefined) all.projects[idx].prodUrl = String(body.prodUrl).trim().replace(/\/+$/, '');
+        if (body.stagingUrl !== undefined) all.projects[idx].stagingUrl = String(body.stagingUrl).trim().replace(/\/+$/, '');
+        if (body.localPort !== undefined) all.projects[idx].localPort = String(body.localPort).trim();
+        if (body.activeEnv !== undefined) all.projects[idx].activeEnv = String(body.activeEnv);
         if (body.repoPath !== undefined) all.projects[idx].repoPath = String(body.repoPath).trim().replace(/\/+$/, '');
         if (body.studioUrl !== undefined) all.projects[idx].studioUrl = String(body.studioUrl).trim().replace(/\/+$/, '');
         saveAllCfg(all);
@@ -243,6 +268,21 @@ module.exports = function ({ addPrefixRoute, json, readBody }) {
         if (all.activeProject === projName) all.activeProject = all.projects.length ? all.projects[0].name : '';
         saveAllCfg(all);
         return json(res, { ok: true, activeProject: all.activeProject });
+      }
+
+      // -- Environment Switch ---------------------------------------------------
+      if (subpath === '/env' && method === 'POST') {
+        const body = await readBody(req);
+        if (!body.env || !['production', 'staging', 'local'].includes(body.env)) {
+          return json(res, { error: 'env must be production, staging, or local' }, 400);
+        }
+        const all = readAllCfg();
+        const proj = getActiveProject(all);
+        if (!proj) return json(res, { error: 'No active project' }, 400);
+        const idx = all.projects.findIndex(p => p.name === proj.name);
+        if (idx >= 0) all.projects[idx].activeEnv = body.env;
+        saveAllCfg(all);
+        return json(res, { ok: true, activeEnv: body.env, previewUrl: resolvePreviewUrl(all.projects[idx]) });
       }
 
       // -- Test connection ------------------------------------------------------
@@ -741,7 +781,7 @@ module.exports = function ({ addPrefixRoute, json, readBody }) {
         return json(res, {
           projectId: cfg.projectId,
           dataset: cfg.dataset,
-          previewUrl: cfg.previewUrl || '',
+          ...getEnvFields(cfg),
           repoPath: cfg.repoPath || '',
           studioUrl: cfg.studioUrl || '',
           types,

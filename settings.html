@@ -108,9 +108,18 @@
     </div>
   </div>
   <div class="field">
-    <label>Preview URL <span style="font-weight:400;color:var(--overlay1);">(optional)</span></label>
-    <input id="fPreviewUrl" type="url" placeholder="https://mysite.com or http://localhost:3000">
-    <div style="font-size:10px;color:var(--overlay1);margin-top:2px;">The frontend URL for live preview. Slug is appended automatically (e.g. https://mysite.com + /about).</div>
+    <label>Production URL</label>
+    <input id="fProdUrl" type="url" placeholder="https://mysite.com">
+    <div style="font-size:10px;color:var(--overlay1);margin-top:2px;">Live production site URL.</div>
+  </div>
+  <div class="field">
+    <label>Staging URL <span style="font-weight:400;color:var(--overlay1);">(optional)</span></label>
+    <input id="fStagingUrl" type="url" placeholder="https://staging.mysite.com">
+  </div>
+  <div class="field">
+    <label>Local Port <span style="font-weight:400;color:var(--overlay1);">(optional)</span></label>
+    <input id="fLocalPort" type="text" placeholder="3000">
+    <div style="font-size:10px;color:var(--overlay1);margin-top:2px;">Local dev server port (e.g. 3000). Used as http://localhost:PORT.</div>
   </div>
   <div class="field">
     <label>Local Repo <span style="font-weight:400;color:var(--overlay1);">(optional)</span></label>
@@ -189,7 +198,9 @@ function showForm(proj) {
   document.getElementById('fName').value = proj ? proj.name : '';
   document.getElementById('fProjectId').value = proj ? proj.projectId : '';
   document.getElementById('fDataset').value = proj ? proj.dataset : '';
-  document.getElementById('fPreviewUrl').value = proj ? (proj.previewUrl || '') : '';
+  document.getElementById('fProdUrl').value = proj ? (proj.prodUrl || proj.previewUrl || '') : '';
+  document.getElementById('fStagingUrl').value = proj ? (proj.stagingUrl || '') : '';
+  document.getElementById('fLocalPort').value = proj ? (proj.localPort || '') : '';
   // Populate repo dropdown
   var repoSelect = document.getElementById('fRepoPath');
   var currentRepo = proj ? (proj.repoPath || '') : '';
@@ -219,7 +230,9 @@ async function saveForm() {
   var projectId = document.getElementById('fProjectId').value.trim();
   var dataset = document.getElementById('fDataset').value.trim();
   var apiToken = document.getElementById('fToken').value;
-  var previewUrl = document.getElementById('fPreviewUrl').value.trim().replace(/\/+$/, '');
+  var prodUrl = document.getElementById('fProdUrl').value.trim().replace(/\/+$/, '');
+  var stagingUrl = document.getElementById('fStagingUrl').value.trim().replace(/\/+$/, '');
+  var localPort = document.getElementById('fLocalPort').value.trim();
   var repoPath = document.getElementById('fRepoPath').value.trim().replace(/\/+$/, '');
   var studioUrl = document.getElementById('fStudioUrl').value.trim().replace(/\/+$/, '');
 
@@ -229,7 +242,7 @@ async function saveForm() {
   }
 
   if (editingName) {
-    var body = { name: name, projectId: projectId, dataset: dataset, previewUrl: previewUrl, repoPath: repoPath, studioUrl: studioUrl };
+    var body = { name: name, projectId: projectId, dataset: dataset, prodUrl: prodUrl, stagingUrl: stagingUrl, localPort: localPort, repoPath: repoPath, studioUrl: studioUrl };
     if (apiToken) body.apiToken = apiToken;
     var r = await fetch(API + '/projects/' + encodeURIComponent(editingName), {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
@@ -241,7 +254,7 @@ async function saveForm() {
     if (!apiToken) { DevOpsPilot.toast('API Token is required for new projects.', 'error'); return; }
     var r = await fetch(API + '/projects', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: name, projectId: projectId, dataset: dataset, apiToken: apiToken, previewUrl: previewUrl, repoPath: repoPath, studioUrl: studioUrl }),
+      body: JSON.stringify({ name: name, projectId: projectId, dataset: dataset, apiToken: apiToken, prodUrl: prodUrl, stagingUrl: stagingUrl, localPort: localPort, repoPath: repoPath, studioUrl: studioUrl }),
     });
     var data = await r.json();
     if (data.error) { DevOpsPilot.toast(data.error, 'error'); return; }
