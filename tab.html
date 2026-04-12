@@ -530,11 +530,7 @@
   <span class="conn-dot" id="connDot"></span>
   <select class="project-select" id="projectSelect" onchange="switchProject(this.value)"></select>
   <span class="spacer"></span>
-  <select class="space-select" id="envSelect" style="display:none;max-width:120px;" onchange="switchEnv(this.value)">
-    <option value="production">Production</option>
-    <option value="staging">Staging</option>
-    <option value="local">Local</option>
-  </select>
+  <select class="project-select" id="envSelect" style="display:none;" onchange="switchEnv(this.value)"></select>
   <button class="btn sm" id="studioBtn" style="display:none;" onclick="openStudio()">Open Studio</button>
   <button class="btn sm" onclick="refresh()">Refresh</button>
 </div>
@@ -779,9 +775,16 @@ async function loadHealth() {
   // Show/hide env selector
   var envSelect = document.getElementById('envSelect');
   if (envSelect) {
-    var hasEnvs = h.prodUrl || h.stagingUrl || h.localPort;
-    envSelect.style.display = hasEnvs ? '' : 'none';
-    envSelect.value = h.activeEnv || 'production';
+    var envs = Array.isArray(h.environments) ? h.environments : [];
+    if (envs.length > 1) {
+      envSelect.innerHTML = envs.map(function (e) {
+        return '<option value="' + esc(e.id) + '">' + esc(e.label) + '</option>';
+      }).join('');
+      envSelect.value = h.activeEnv || envs[0].id;
+      envSelect.style.display = '';
+    } else {
+      envSelect.style.display = 'none';
+    }
   }
 }
 

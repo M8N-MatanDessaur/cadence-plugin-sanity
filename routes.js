@@ -62,22 +62,78 @@ function isConfigured(cfg) {
   return !!(cfg.projectId && cfg.dataset && cfg.apiToken);
 }
 
+function slugifyEnvId(s) {
+  return String(s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'env';
+}
+
+// Return the project's environments list, migrating legacy fields if needed.
+// Each entry: { id, label, url, localPort }
+function normalizeEnvironments(p) {
+  if (Array.isArray(p.environments) && p.environments.length) {
+    return p.environments.map(function (e) {
+      var label = e.label || e.id || 'Env';
+      return {
+        id: e.id || slugifyEnvId(label),
+        label: label,
+        url: e.url || '',
+        localPort: e.localPort || '',
+      };
+    });
+  }
+  // Legacy migration from prodUrl / stagingUrl / localPort
+  var out = [];
+  var prodUrl = p.prodUrl || p.previewUrl || '';
+  if (prodUrl) out.push({ id: 'production', label: 'Production', url: prodUrl, localPort: '' });
+  if (p.stagingUrl) out.push({ id: 'staging', label: 'Staging', url: p.stagingUrl, localPort: '' });
+  if (p.localPort) out.push({ id: 'local', label: 'Local', url: '', localPort: p.localPort });
+  if (!out.length) out.push({ id: 'production', label: 'Production', url: '', localPort: '' });
+  return out;
+}
+
+function sanitizeEnvironments(raw) {
+  if (!Array.isArray(raw)) return null;
+  var seen = {};
+  var out = [];
+  for (var i = 0; i < raw.length; i++) {
+    var e = raw[i] || {};
+    var label = String(e.label || '').trim();
+    if (!label) continue;
+    var id = String(e.id || '').trim() || slugifyEnvId(label);
+    var base = id, n = 2;
+    while (seen[id]) { id = base + '-' + n++; }
+    seen[id] = true;
+    out.push({
+      id: id,
+      label: label,
+      url: e.url ? String(e.url).trim().replace(/\/+$/, '') : '',
+      localPort: e.localPort ? String(e.localPort).trim() : '',
+    });
+  }
+  return out;
+}
+
+function getActiveEnv(p) {
+  var envs = normalizeEnvironments(p);
+  return envs.find(function (e) { return e.id === p.activeEnv; }) || envs[0];
+}
+
+function resolveEnvUrl(env) {
+  if (!env) return '';
+  if (env.localPort) return 'http://localhost:' + env.localPort;
+  return env.url || '';
+}
+
 function resolvePreviewUrl(cfg) {
-  // Compute preview URL from environment fields, falling back to legacy previewUrl
-  var env = cfg.activeEnv || 'production';
-  if (env === 'local' && cfg.localPort) return 'http://localhost:' + cfg.localPort;
-  if (env === 'staging' && cfg.stagingUrl) return cfg.stagingUrl;
-  if (cfg.prodUrl) return cfg.prodUrl;
-  return cfg.previewUrl || '';
+  return resolveEnvUrl(getActiveEnv(cfg));
 }
 
 function getEnvFields(p) {
+  var envs = normalizeEnvironments(p);
+  var active = envs.find(function (e) { return e.id === p.activeEnv; }) || envs[0];
   return {
-    prodUrl: p.prodUrl || p.previewUrl || '',
-    stagingUrl: p.stagingUrl || '',
-    localPort: p.localPort || '',
-    activeEnv: p.activeEnv || 'production',
-    previewUrl: resolvePreviewUrl(p),
+    environments: envs,
+    activeEnv: active ? active.id : '',
+    previewUrl: resolveEnvUrl(active),
   };
 }
 
@@ -185,6 +241,7 @@ module.exports = function ({ addPrefixRoute, json, readBody }) {
             name: p.name,
             projectId: p.projectId,
             dataset: p.dataset,
+            apiToken: p.apiToken || '',
             apiTokenSet: !!p.apiToken,
             ...getEnvFields(p),
             repoPath: p.repoPath || '',
@@ -204,15 +261,19 @@ module.exports = function ({ addPrefixRoute, json, readBody }) {
         if (all.projects.find(p => p.name === name)) {
           return json(res, { error: 'A project with that name already exists.' }, 409);
         }
+        const cleanEnvs = sanitizeEnvironments(body.environments);
+        const envs = (cleanEnvs && cleanEnvs.length) ? cleanEnvs : [{
+          id: 'production', label: 'Production',
+          url: body.prodUrl ? String(body.prodUrl).trim().replace(/\/+$/, '') : '',
+          localPort: body.localPort ? String(body.localPort).trim() : '',
+        }];
         all.projects.push({
           name,
           projectId: String(body.projectId).trim(),
           dataset: String(body.dataset).trim(),
           apiToken: String(body.apiToken),
-          prodUrl: body.prodUrl ? String(body.prodUrl).trim().replace(/\/+$/, '') : '',
-          stagingUrl: body.stagingUrl ? String(body.stagingUrl).trim().replace(/\/+$/, '') : '',
-          localPort: body.localPort ? String(body.localPort).trim() : '',
-          activeEnv: 'production',
+          environments: envs,
+          activeEnv: envs[0].id,
           repoPath: body.repoPath ? String(body.repoPath).trim().replace(/\/+$/, '') : '',
           studioUrl: body.studioUrl ? String(body.studioUrl).trim().replace(/\/+$/, '') : '',
         });
@@ -249,9 +310,20 @@ module.exports = function ({ addPrefixRoute, json, readBody }) {
         if (body.projectId !== undefined) all.projects[idx].projectId = String(body.projectId).trim();
         if (body.dataset !== undefined) all.projects[idx].dataset = String(body.dataset).trim();
         if (body.apiToken !== undefined) all.projects[idx].apiToken = String(body.apiToken);
-        if (body.prodUrl !== undefined) all.projects[idx].prodUrl = String(body.prodUrl).trim().replace(/\/+$/, '');
-        if (body.stagingUrl !== undefined) all.projects[idx].stagingUrl = String(body.stagingUrl).trim().replace(/\/+$/, '');
-        if (body.localPort !== undefined) all.projects[idx].localPort = String(body.localPort).trim();
+        if (body.environments !== undefined) {
+          const clean = sanitizeEnvironments(body.environments);
+          if (clean && clean.length) {
+            all.projects[idx].environments = clean;
+            // Drop legacy fields so normalizeEnvironments uses the new list exclusively.
+            delete all.projects[idx].prodUrl;
+            delete all.projects[idx].stagingUrl;
+            delete all.projects[idx].localPort;
+            delete all.projects[idx].previewUrl;
+            if (!clean.find(function (e) { return e.id === all.projects[idx].activeEnv; })) {
+              all.projects[idx].activeEnv = clean[0].id;
+            }
+          }
+        }
         if (body.activeEnv !== undefined) all.projects[idx].activeEnv = String(body.activeEnv);
         if (body.repoPath !== undefined) all.projects[idx].repoPath = String(body.repoPath).trim().replace(/\/+$/, '');
         if (body.studioUrl !== undefined) all.projects[idx].studioUrl = String(body.studioUrl).trim().replace(/\/+$/, '');
@@ -273,14 +345,16 @@ module.exports = function ({ addPrefixRoute, json, readBody }) {
       // -- Environment Switch ---------------------------------------------------
       if (subpath === '/env' && method === 'POST') {
         const body = await readBody(req);
-        if (!body.env || !['production', 'staging', 'local'].includes(body.env)) {
-          return json(res, { error: 'env must be production, staging, or local' }, 400);
-        }
+        if (!body.env) return json(res, { error: 'env is required' }, 400);
         const all = readAllCfg();
         const proj = getActiveProject(all);
         if (!proj) return json(res, { error: 'No active project' }, 400);
         const idx = all.projects.findIndex(p => p.name === proj.name);
-        if (idx >= 0) all.projects[idx].activeEnv = body.env;
+        const envs = normalizeEnvironments(all.projects[idx]);
+        if (!envs.find(function (e) { return e.id === body.env; })) {
+          return json(res, { error: 'Unknown env: ' + body.env }, 400);
+        }
+        all.projects[idx].activeEnv = body.env;
         saveAllCfg(all);
         return json(res, { ok: true, activeEnv: body.env, previewUrl: resolvePreviewUrl(all.projects[idx]) });
       }

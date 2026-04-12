@@ -70,6 +70,26 @@
     cursor: pointer; color: var(--subtext0); display: flex; align-items: center;
   }
   .pw-toggle:hover { color: var(--accent); }
+
+  /* -- Environments editor ---------------------------------- */
+  .env-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 6px; }
+  .env-row {
+    display: grid; grid-template-columns: 120px 1fr 80px auto;
+    gap: 6px; align-items: center;
+  }
+  .env-row input {
+    width: 100%; padding: 6px 8px; background: var(--base);
+    border: 1px solid var(--surface1); border-radius: var(--radius, 6px);
+    color: var(--text); font: 12px var(--font-ui); outline: none;
+  }
+  .env-row input:focus { border-color: var(--accent); }
+  .env-remove {
+    padding: 5px 8px; font-size: 11px; background: transparent;
+    border: 1px solid var(--surface1); border-radius: var(--radius, 6px);
+    color: var(--subtext1); cursor: pointer; font-family: var(--font-ui);
+  }
+  .env-remove:hover { border-color: var(--red); color: var(--red); }
+  .env-add-btn { margin-top: 4px; font-size: 11px; padding: 4px 10px; }
 </style>
 </head>
 <body>
@@ -108,18 +128,10 @@
     </div>
   </div>
   <div class="field">
-    <label>Production URL</label>
-    <input id="fProdUrl" type="url" placeholder="https://mysite.com">
-    <div style="font-size:10px;color:var(--overlay1);margin-top:2px;">Live production site URL.</div>
-  </div>
-  <div class="field">
-    <label>Staging URL <span style="font-weight:400;color:var(--overlay1);">(optional)</span></label>
-    <input id="fStagingUrl" type="url" placeholder="https://staging.mysite.com">
-  </div>
-  <div class="field">
-    <label>Local Port <span style="font-weight:400;color:var(--overlay1);">(optional)</span></label>
-    <input id="fLocalPort" type="text" placeholder="3000">
-    <div style="font-size:10px;color:var(--overlay1);margin-top:2px;">Local dev server port (e.g. 3000). Used as http://localhost:PORT.</div>
+    <label>Environments</label>
+    <div id="envList" class="env-list"></div>
+    <button type="button" class="btn env-add-btn" onclick="addEnvRow()">+ Add Environment</button>
+    <div style="font-size:10px;color:var(--overlay1);margin-top:4px;">Add as many environments as you need. Use a URL (https://...) or a Local Port (served as http://localhost:PORT).</div>
   </div>
   <div class="field">
     <label>Local Repo <span style="font-weight:400;color:var(--overlay1);">(optional)</span></label>
@@ -198,9 +210,7 @@ function showForm(proj) {
   document.getElementById('fName').value = proj ? proj.name : '';
   document.getElementById('fProjectId').value = proj ? proj.projectId : '';
   document.getElementById('fDataset').value = proj ? proj.dataset : '';
-  document.getElementById('fProdUrl').value = proj ? (proj.prodUrl || proj.previewUrl || '') : '';
-  document.getElementById('fStagingUrl').value = proj ? (proj.stagingUrl || '') : '';
-  document.getElementById('fLocalPort').value = proj ? (proj.localPort || '') : '';
+  renderEnvEditor(proj ? (proj.environments || []) : []);
   // Populate repo dropdown
   var repoSelect = document.getElementById('fRepoPath');
   var currentRepo = proj ? (proj.repoPath || '') : '';
@@ -211,9 +221,8 @@ function showForm(proj) {
     repoSelect.innerHTML += '<option value="' + esc(repoPath) + '"' + selected + '>' + esc(repoName) + '</option>';
   }
   document.getElementById('fStudioUrl').value = proj ? (proj.studioUrl || '') : '';
-  document.getElementById('fToken').value = '';
-  if (proj) document.getElementById('fToken').placeholder = '(unchanged)';
-  else document.getElementById('fToken').placeholder = 'sk...';
+  document.getElementById('fToken').value = proj ? (proj.apiToken || '') : '';
+  document.getElementById('fToken').placeholder = 'sk...';
   document.getElementById('formArea').style.display = '';
   document.getElementById('addBtn').style.display = 'none';
   document.getElementById('fName').focus();
@@ -225,14 +234,46 @@ function hideForm() {
   editingName = null;
 }
 
+function renderEnvEditor(envs) {
+  var list = document.getElementById('envList');
+  list.innerHTML = '';
+  if (!envs || !envs.length) envs = [{ label: 'Production', url: '', localPort: '' }];
+  envs.forEach(function (e) { list.appendChild(buildEnvRow(e)); });
+}
+function buildEnvRow(e) {
+  var row = document.createElement('div');
+  row.className = 'env-row';
+  row.innerHTML =
+    '<input class="env-label" type="text" placeholder="Production" value="' + esc(e.label || '') + '">'
+    + '<input class="env-url" type="url" placeholder="https://mysite.com" value="' + esc(e.url || '') + '">'
+    + '<input class="env-port" type="text" placeholder="Port" value="' + esc(e.localPort || '') + '">'
+    + '<button type="button" class="env-remove" onclick="this.parentElement.remove()">Remove</button>';
+  return row;
+}
+function addEnvRow() {
+  document.getElementById('envList').appendChild(buildEnvRow({ label: '', url: '', localPort: '' }));
+}
+function collectEnvs() {
+  var rows = document.querySelectorAll('#envList .env-row');
+  var out = [];
+  rows.forEach(function (r) {
+    var label = r.querySelector('.env-label').value.trim();
+    if (!label) return;
+    out.push({
+      label: label,
+      url: r.querySelector('.env-url').value.trim().replace(/\/+$/, ''),
+      localPort: r.querySelector('.env-port').value.trim(),
+    });
+  });
+  return out;
+}
+
 async function saveForm() {
   var name = document.getElementById('fName').value.trim();
   var projectId = document.getElementById('fProjectId').value.trim();
   var dataset = document.getElementById('fDataset').value.trim();
   var apiToken = document.getElementById('fToken').value;
-  var prodUrl = document.getElementById('fProdUrl').value.trim().replace(/\/+$/, '');
-  var stagingUrl = document.getElementById('fStagingUrl').value.trim().replace(/\/+$/, '');
-  var localPort = document.getElementById('fLocalPort').value.trim();
+  var environments = collectEnvs();
   var repoPath = document.getElementById('fRepoPath').value.trim().replace(/\/+$/, '');
   var studioUrl = document.getElementById('fStudioUrl').value.trim().replace(/\/+$/, '');
 
@@ -240,9 +281,13 @@ async function saveForm() {
     DevOpsPilot.toast('Name, Project ID, and Dataset are required.', 'error');
     return;
   }
+  if (!environments.length) {
+    DevOpsPilot.toast('At least one environment is required.', 'error');
+    return;
+  }
 
   if (editingName) {
-    var body = { name: name, projectId: projectId, dataset: dataset, prodUrl: prodUrl, stagingUrl: stagingUrl, localPort: localPort, repoPath: repoPath, studioUrl: studioUrl };
+    var body = { name: name, projectId: projectId, dataset: dataset, environments: environments, repoPath: repoPath, studioUrl: studioUrl };
     if (apiToken) body.apiToken = apiToken;
     var r = await fetch(API + '/projects/' + encodeURIComponent(editingName), {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
@@ -254,7 +299,7 @@ async function saveForm() {
     if (!apiToken) { DevOpsPilot.toast('API Token is required for new projects.', 'error'); return; }
     var r = await fetch(API + '/projects', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: name, projectId: projectId, dataset: dataset, apiToken: apiToken, prodUrl: prodUrl, stagingUrl: stagingUrl, localPort: localPort, repoPath: repoPath, studioUrl: studioUrl }),
+      body: JSON.stringify({ name: name, projectId: projectId, dataset: dataset, apiToken: apiToken, environments: environments, repoPath: repoPath, studioUrl: studioUrl }),
     });
     var data = await r.json();
     if (data.error) { DevOpsPilot.toast(data.error, 'error'); return; }
