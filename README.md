@@ -1,6 +1,6 @@
-# DevOps Pilot Plugin: Sanity.io
+# Symphonee Plugin: Sanity.io
 
-Manage Sanity.io datasets, document types, and documents directly from DevOps Pilot.
+Manage Sanity.io datasets, document types, and documents directly from Symphonee.
 
 ## Features
 
@@ -15,13 +15,13 @@ Manage Sanity.io datasets, document types, and documents directly from DevOps Pi
 ## Installation
 
 ### From plugin directory
-Copy this folder to your DevOps Pilot plugins directory, or symlink it:
+Copy this folder to your Symphonee plugins directory, or symlink it:
 ```bash
-mklink /D "%APPDATA%\devops-pilot\plugins\sanity" "C:\path\to\devops-pilot-plugin-sanity"
+mklink /D "%APPDATA%\symphonee\plugins\sanity" "C:\path\to\symphonee-plugin-sanity"
 ```
 
 ### Configuration
-1. Open DevOps Pilot > Settings > Plugins
+1. Open Symphonee > Settings > Plugins
 2. Enter your Sanity Project ID, Dataset, and API Token
 3. Click Test to verify the connection
 

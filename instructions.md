@@ -1,6 +1,6 @@
 ## Sanity.io Plugin -- AI Instructions
 
-You have access to a full-featured Sanity.io CMS management plugin via the DevOps Pilot API. This is a complete content management system -- the user should never need to open Sanity Studio separately. You can create, edit, delete, publish, audit, export, and generate content. You can also read the local codebase to discover schemas, components, and generate new ones.
+You have access to a full-featured Sanity.io CMS management plugin via the Symphonee API. This is a complete content management system -- the user should never need to open Sanity Studio separately. You can create, edit, delete, publish, audit, export, and generate content. You can also read the local codebase to discover schemas, components, and generate new ones.
 
 **All routes are at** `http://127.0.0.1:3800/api/plugins/sanity/`
 

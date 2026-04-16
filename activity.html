@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8">
-<script src="/plugins/sdk/devops-pilot-sdk.js"></script>
+<script src="/plugins/sdk/symphonee-sdk.js"></script>
 <style>
   * { box-sizing: border-box; }
   ::-webkit-scrollbar { width: 7px; height: 7px; }
@@ -124,7 +124,7 @@ async function load() {
 }
 
 function inspect(docType, id, title) {
-  DevOpsPilot.askAi(
+  Symphonee.askAi(
     'Fetch this Sanity document:\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/documents/' + docType + '/' + id + '\n\n' +
     'Show me "' + title + '" from the "' + docType + '" type in a readable format. Then ask what I want to do -- edit fields, duplicate, or delete it.'
   );

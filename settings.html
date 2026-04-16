@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <title>Sanity Projects</title>
-<script src="/plugins/sdk/devops-pilot-sdk.js"></script>
+<script src="/plugins/sdk/symphonee-sdk.js"></script>
 <style>
   * { box-sizing: border-box; }
   body { padding: 0; margin: 0; font-family: var(--font-ui); color: var(--text); background: transparent; }
@@ -138,7 +138,7 @@
     <select id="fRepoPath" style="width:100%;padding:6px 8px;background:var(--base);border:1px solid var(--surface1);border-radius:var(--radius,6px);color:var(--text);font:12px var(--font-ui);outline:none;">
       <option value="">-- None --</option>
     </select>
-    <div style="font-size:10px;color:var(--overlay1);margin-top:2px;">Select from repos configured in DevOps Pilot. Enables AI to read schemas, generate components, and work on the codebase. Also sets the active repo in the dashboard.</div>
+    <div style="font-size:10px;color:var(--overlay1);margin-top:2px;">Select from repos configured in Symphonee. Enables AI to read schemas, generate components, and work on the codebase. Also sets the active repo in the dashboard.</div>
   </div>
   <div class="field">
     <label>Studio URL <span style="font-weight:400;color:var(--overlay1);">(optional)</span></label>
@@ -170,7 +170,7 @@ async function loadProjects() {
     projects = [];
     activeProject = '';
   }
-  // Also load available repos from DevOps Pilot
+  // Also load available repos from Symphonee
   try {
     var rr = await fetch('/api/repos');
     availableRepos = await rr.json();
@@ -278,11 +278,11 @@ async function saveForm() {
   var studioUrl = document.getElementById('fStudioUrl').value.trim().replace(/\/+$/, '');
 
   if (!name || !projectId || !dataset) {
-    DevOpsPilot.toast('Name, Project ID, and Dataset are required.', 'error');
+    Symphonee.toast('Name, Project ID, and Dataset are required.', 'error');
     return;
   }
   if (!environments.length) {
-    DevOpsPilot.toast('At least one environment is required.', 'error');
+    Symphonee.toast('At least one environment is required.', 'error');
     return;
   }
 
@@ -293,17 +293,17 @@ async function saveForm() {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
     });
     var data = await r.json();
-    if (data.error) { DevOpsPilot.toast(data.error, 'error'); return; }
-    DevOpsPilot.toast('Project updated.', 'success');
+    if (data.error) { Symphonee.toast(data.error, 'error'); return; }
+    Symphonee.toast('Project updated.', 'success');
   } else {
-    if (!apiToken) { DevOpsPilot.toast('API Token is required for new projects.', 'error'); return; }
+    if (!apiToken) { Symphonee.toast('API Token is required for new projects.', 'error'); return; }
     var r = await fetch(API + '/projects', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: name, projectId: projectId, dataset: dataset, apiToken: apiToken, environments: environments, repoPath: repoPath, studioUrl: studioUrl }),
     });
     var data = await r.json();
-    if (data.error) { DevOpsPilot.toast(data.error, 'error'); return; }
-    DevOpsPilot.toast('Project added.', 'success');
+    if (data.error) { Symphonee.toast(data.error, 'error'); return; }
+    Symphonee.toast('Project added.', 'success');
   }
 
   hideForm();
@@ -313,7 +313,7 @@ async function saveForm() {
 }
 
 function restartApp() {
-  DevOpsPilot.toast('Restarting app...', 'info');
+  Symphonee.toast('Restarting app...', 'info');
   setTimeout(function() {
     fetch('/api/restart-app', { method: 'POST' }).catch(function() {});
   }, 500);
@@ -324,7 +324,7 @@ async function setActive(name) {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name: name }),
   });
-  // Also set active repo in DevOps Pilot if this project has one
+  // Also set active repo in Symphonee if this project has one
   var proj = projects.find(function(p) { return p.name === name; });
   if (proj && proj.repoPath) {
     var repoName = findRepoName(proj.repoPath);
@@ -339,7 +339,7 @@ async function setActive(name) {
   }
   await loadProjects();
   notifyParent();
-  DevOpsPilot.toast('Switched to ' + name, 'success');
+  Symphonee.toast('Switched to ' + name, 'success');
 }
 
 function findRepoName(repoPath) {
@@ -380,7 +380,7 @@ async function confirmRemove() {
   pendingRemove = null;
   await loadProjects();
   notifyParent();
-  DevOpsPilot.toast('Project removed.', 'success');
+  Symphonee.toast('Project removed.', 'success');
 }
 function cancelRemove() {
   pendingRemove = null;
