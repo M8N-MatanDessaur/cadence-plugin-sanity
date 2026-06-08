@@ -2641,7 +2641,7 @@ window.addEventListener('resize', function() {
 });
 
 window.addEventListener('message', function(e) {
-  if (!e.data || !e.data.__devopsPilot) return;
+  if (!e.data || !e.data.__symphonee) return;
   if (e.data.type === 'configChanged' && e.data.plugin === 'sanity') {
     loadProjectSelector().then(function() { init(); });
   }
