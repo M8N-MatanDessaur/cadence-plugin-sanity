@@ -74,6 +74,23 @@ function Sanity({ host }) {
   const filtered = useMemo(() => q.trim().toLowerCase(), [q]);
   const typeRow = openType && health.data ? (health.data.types || []).find((t) => t.name === openType) : null;
   const openTheDoc = (type, id) => { setTab('content'); setOpenType(type); setOpenAsset(null); setMode(null); setOpenDoc({ type, id }); };
+
+  // ---------------------------------------------------------------- opened AT something
+  // "@sanity pricing" in the palette, a document a CLI resolved, a search hit: the app opens
+  // this surface with a target and says so again whenever it changes while the screen is up.
+  // { type, id, project? } lands on that document; { query } on the content list filtered to it.
+  const landOn = useCallback((target) => {
+    if (!target) return;
+    if (target.project) setProject(String(target.project));
+    if (target.id && target.type) { openTheDoc(String(target.type), String(target.id)); return; }
+    if (target.query) { leave(); setTab('content'); setQ(String(target.query)); }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    if (!host.target || !host.onTarget) return;
+    landOn(host.target());
+    return host.onTarget(landOn);
+  }, [host, landOn]);
   const runGroq = (query) => { setGroqSeed({ query, at: Date.now() }); setTab('groq'); leave(); };
   const problems = insights.data ? (insights.data.entries || []).filter((e) => e.issues.some((i) => i !== 'draft')).length : 0;
 
