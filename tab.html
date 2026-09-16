@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.snow.css">
 <script src="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.min.js"></script>
-<script src="/plugins/sdk/symphonee-sdk.js"></script>
+<script src="/plugins/sdk/cadence-sdk.js"></script>
 <style>
   * { box-sizing: border-box; }
   ::-webkit-scrollbar { width: 7px; height: 7px; }
@@ -541,7 +541,7 @@
 <div class="setup" id="setupScreen" style="display:none;">
   <h2>Sanity.io</h2>
   <p>No Sanity projects configured. Add your Project ID, Dataset, and API Token in Settings to get started.</p>
-  <button class="btn primary" style="padding:8px 24px;" onclick="Symphonee.openSettings('plugins')">Open Settings</button>
+  <button class="btn primary" style="padding:8px 24px;" onclick="Cadence.openSettings('plugins')">Open Settings</button>
 </div>
 
 <!-- ================================================================
@@ -729,7 +729,7 @@ async function switchProject(name) {
   if (!name) return;
   await api('POST', '/projects/active', { name: name });
   state.activeProject = name;
-  // Also set the active repo in Symphonee if this project has one
+  // Also set the active repo in Cadence if this project has one
   var proj = state.projects.find(function(p) { return p.name === name; });
   if (proj && proj.repoPath) {
     // Find repo name by matching path
@@ -1075,38 +1075,38 @@ function homeAction(title, desc, action) {
 function homeActionClick(action) {
   if (action === 'aiGenerate') {
     typePickerThenAi('Generate Content', function(t) {
-      Symphonee.askAi('Generate content for Sanity document type "' + t + '".\nFirst discover the schema:\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/summary/' + t + '\n\nAsk how many documents to create, then generate realistic production-quality content matching the discovered fields. Create each via:\ncurl -s -X POST http://127.0.0.1:3800/api/plugins/sanity/documents/' + t + ' -H "Content-Type: application/json" -d \'{"field":"value",...}\'');
+      Cadence.askAi('Generate content for Sanity document type "' + t + '".\nFirst discover the schema:\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/summary/' + t + '\n\nAsk how many documents to create, then generate realistic production-quality content matching the discovered fields. Create each via:\ncurl -s -X POST http://127.0.0.1:3800/api/plugins/sanity/documents/' + t + ' -H "Content-Type: application/json" -d \'{"field":"value",...}\'');
     });
   } else if (action === 'aiGroq') {
     askInput({ title: 'Run GROQ Query', label: 'GROQ Query', placeholder: '*[_type == "post"]{title, _id}', multiline: true }).then(function(q) {
       if (!q) return;
-      Symphonee.askAi('Run this GROQ query on Sanity:\ncurl -s -X POST http://127.0.0.1:3800/api/plugins/sanity/groq -H "Content-Type: application/json" -d \'{"query":"' + q.replace(/\\/g, '\\\\').replace(/'/g, "'\\''").replace(/"/g, '\\"') + '"}\'\n\nFormat the results in a readable table or list.');
+      Cadence.askAi('Run this GROQ query on Sanity:\ncurl -s -X POST http://127.0.0.1:3800/api/plugins/sanity/groq -H "Content-Type: application/json" -d \'{"query":"' + q.replace(/\\/g, '\\\\').replace(/'/g, "'\\''").replace(/"/g, '\\"') + '"}\'\n\nFormat the results in a readable table or list.');
     });
   } else if (action === 'aiStale') {
     askInput({ title: 'Find Stale Content', label: 'Stale after how many days?', placeholder: '30', defaultValue: '30' }).then(function(days) {
       if (!days) return;
-      Symphonee.askAi('Query Sanity for documents not updated in ' + days + ' days:\ncurl -s -X POST http://127.0.0.1:3800/api/plugins/sanity/groq -H "Content-Type: application/json" -d \'{"query":"*[dateTime(_updatedAt) < dateTime(now()) - 60*60*24*' + days + '] | order(_updatedAt asc) [0...100] {_type, _id, title, name, _updatedAt}"}\'\n\nCreate a well-formatted markdown table sorted by staleness.\nSave as a note called "Sanity Stale Content Report" using:\nnode scripts/save-note.js "Sanity Stale Content Report" --file .ai-workspace/stale-report.md');
+      Cadence.askAi('Query Sanity for documents not updated in ' + days + ' days:\ncurl -s -X POST http://127.0.0.1:3800/api/plugins/sanity/groq -H "Content-Type: application/json" -d \'{"query":"*[dateTime(_updatedAt) < dateTime(now()) - 60*60*24*' + days + '] | order(_updatedAt asc) [0...100] {_type, _id, title, name, _updatedAt}"}\'\n\nCreate a well-formatted markdown table sorted by staleness.\nSave as a note called "Sanity Stale Content Report" using:\nnode scripts/save-note.js "Sanity Stale Content Report" --file .ai-workspace/stale-report.md');
     });
   } else if (action === 'aiAudit') {
     typePickerThenAi('Content Health Audit', function(t) {
-      Symphonee.askAi('Audit Sanity document type "' + t + '":\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/audit/' + t + '\n\nAlso fetch the full summary:\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/summary/' + t + '\n\nAnalyze content health: missing fields, stale docs, naming inconsistencies, empty fields. Provide actionable recommendations.\nSave as a note.');
+      Cadence.askAi('Audit Sanity document type "' + t + '":\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/audit/' + t + '\n\nAlso fetch the full summary:\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/summary/' + t + '\n\nAnalyze content health: missing fields, stale docs, naming inconsistencies, empty fields. Provide actionable recommendations.\nSave as a note.');
     });
   } else if (action === 'aiExport') {
     typePickerThenAi('Export & Backup', function(t) {
-      Symphonee.askAi('Export all documents from Sanity type "' + t + '":\ncurl -s -X POST http://127.0.0.1:3800/api/plugins/sanity/documents/' + t + '/export\n\nSave the exported JSON as a note called "' + t + ' Export [' + new Date().toISOString().split('T')[0] + ']" using:\nnode scripts/save-note.js "' + t + ' Export" --file .ai-workspace/sanity-export.md');
+      Cadence.askAi('Export all documents from Sanity type "' + t + '":\ncurl -s -X POST http://127.0.0.1:3800/api/plugins/sanity/documents/' + t + '/export\n\nSave the exported JSON as a note called "' + t + ' Export [' + new Date().toISOString().split('T')[0] + ']" using:\nnode scripts/save-note.js "' + t + ' Export" --file .ai-workspace/sanity-export.md');
     });
   } else if (action === 'aiAsk') {
-    Symphonee.askAi('Get a comprehensive overview of my Sanity project:\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/health\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/summary\n\nGive me insights: document type distribution, content health, recommendations for improvement, and any issues you notice.');
+    Cadence.askAi('Get a comprehensive overview of my Sanity project:\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/health\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/summary\n\nGive me insights: document type distribution, content health, recommendations for improvement, and any issues you notice.');
   } else if (action === 'aiAddSchema') {
     var h = state.health || {};
-    Symphonee.askAi('I want to add a new Sanity schema type to my project.\n\n'
+    Cadence.askAi('I want to add a new Sanity schema type to my project.\n\n'
       + 'First, understand the existing setup:\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/repo/schemas\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/repo/info\n\n'
       + 'Read the schema registry to understand the pattern:\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/repo/file/' + encodeURIComponent('src/sanity/schemaTypes/schemaRegistry.ts') + '\n\n'
       + 'Local repo: ' + (h.repoPath || '') + '\n\n'
       + 'Ask me what type of schema I want to create (document type, page component, singleton, object type), what fields it needs, then generate the schema file following the existing patterns. Also update the schema registry to include it.');
   } else if (action === 'aiAddComponent') {
     var h = state.health || {};
-    Symphonee.askAi('I want to add a new page builder component to my Sanity project.\n\n'
+    Cadence.askAi('I want to add a new page builder component to my Sanity project.\n\n'
       + 'First, understand the existing components:\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/repo/components\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/repo/schemas\n\n'
       + 'Read an existing component to understand the pattern (both schema and frontend):\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/repo/file/' + encodeURIComponent('src/components/PageBuilder/components/BrutalistHero/BrutalistHero.tsx') + '\n\n'
       + 'Read the component schemas import file:\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/repo/file/' + encodeURIComponent('src/sanity/schemaTypes/componentSchemas.ts') + '\n\n'
@@ -1114,7 +1114,7 @@ function homeActionClick(action) {
       + 'Ask me what component I want to create, then generate both the schema file and the React component file following the existing patterns. Also register it in componentSchemas.ts.');
   } else if (action === 'aiEditConfig') {
     var h = state.health || {};
-    Symphonee.askAi('I want to modify my Sanity Studio configuration.\n\n'
+    Cadence.askAi('I want to modify my Sanity Studio configuration.\n\n'
       + 'Read the current config:\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/repo/file/' + encodeURIComponent('sanity.config.ts') + '\n\n'
       + 'Read the desk structure:\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/repo/file/' + encodeURIComponent('src/sanity/structure.ts') + '\n\n'
       + 'Read package.json for current plugins:\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/repo/file/' + encodeURIComponent('package.json') + '\n\n'
@@ -1122,7 +1122,7 @@ function homeActionClick(action) {
       + 'Ask me what I want to change -- add plugins, modify the sidebar structure, change the theme, add custom document views, etc.');
   } else if (action === 'aiDeploy') {
     var h = state.health || {};
-    Symphonee.askAi('I want to deploy my Sanity Studio.\n\n'
+    Cadence.askAi('I want to deploy my Sanity Studio.\n\n'
       + 'Check the project setup:\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/repo/info\n\n'
       + 'Read the CLI config:\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/repo/file/' + encodeURIComponent('sanity.cli.ts') + '\n\n'
       + 'Local repo: ' + (h.repoPath || '') + '\n\n'
@@ -1376,7 +1376,7 @@ async function openStudioFile(relPath) {
   var container = document.getElementById('studioFileEditorContainer');
   if (!container) return;
   studioFileEditor = monaco.editor.create(container, {
-    value: r.content, language: lang, theme: 'symphonee',
+    value: r.content, language: lang, theme: 'cadence',
     fontSize: 13, fontFamily: "'Cascadia Code','Cascadia Mono',Consolas,'Courier New',monospace",
     minimap: { enabled: false }, scrollBeyondLastLine: false, wordWrap: 'off',
     automaticLayout: true, lineNumbers: 'on', renderWhitespace: 'selection',
@@ -1398,7 +1398,7 @@ function openStudioFileInFilesTab() {
       var rp = repos[name].replace(/\\\\/g, '/').replace(/\\/g, '/').replace(/\/+$/, '');
       if (rp === repoPath) { repoName = name; break; }
     }
-    if (!repoName) { showToast('Repo not found in Symphonee repos', 'err'); return; }
+    if (!repoName) { showToast('Repo not found in Cadence repos', 'err'); return; }
     fetch('/api/ui/view-file', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ repo: repoName, path: sel.relativePath }),
@@ -1410,7 +1410,7 @@ function aiEditStudioFile() {
   var sel = state.selected;
   if (!sel || !sel.relativePath) return;
   var h = state.health || {};
-  Symphonee.askAi('I want to edit this Sanity ' + (state.section.studioView === 'schemas' ? 'schema' : 'component') + ' file.\n\n'
+  Cadence.askAi('I want to edit this Sanity ' + (state.section.studioView === 'schemas' ? 'schema' : 'component') + ' file.\n\n'
     + 'Read the file:\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/repo/file/' + encodeURIComponent(sel.relativePath) + '\n\n'
     + 'The local repo is at: ' + (h.repoPath || '') + '\n'
     + 'File: ' + sel.relativePath + '\n\n'
@@ -1421,7 +1421,7 @@ function aiAnalyzeStudioFile() {
   var sel = state.selected;
   if (!sel || !sel.relativePath) return;
   var h = state.health || {};
-  Symphonee.askAi('Analyze this Sanity ' + (state.section.studioView === 'schemas' ? 'schema' : 'component') + ' file.\n\n'
+  Cadence.askAi('Analyze this Sanity ' + (state.section.studioView === 'schemas' ? 'schema' : 'component') + ' file.\n\n'
     + 'Read the file:\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/repo/file/' + encodeURIComponent(sel.relativePath) + '\n\n'
     + 'Also check what content exists for this type:\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/summary\n\n'
     + 'Explain the schema structure, field types, validation rules, and suggest improvements or missing fields.');
@@ -2026,7 +2026,7 @@ function askAiAboutDoc() {
   var doc = state.selected;
   if (!doc) return;
   var title = doc.title || doc.name || doc.heading || doc._id;
-  Symphonee.askAi('Fetch this Sanity document:\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/documents/' + doc._type + '/' + doc._id + '\n\nThis is "' + title + '" (type: ' + doc._type + '). Show me a readable summary and ask what I want to do -- edit fields, duplicate, translate, or analyze content quality.');
+  Cadence.askAi('Fetch this Sanity document:\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/documents/' + doc._type + '/' + doc._id + '\n\nThis is "' + title + '" (type: ' + doc._type + '). Show me a readable summary and ask what I want to do -- edit fields, duplicate, translate, or analyze content quality.');
 }
 
 // ============================================================================
@@ -2125,7 +2125,7 @@ function copyAssetUrl() {
 function aiAssetAction() {
   var a = state.selected;
   if (!a) return;
-  Symphonee.askAi('Check this Sanity asset:\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/assets/' + encodeURIComponent(a._id) + '/usage\n\nAsset: ' + (a.originalFilename || a._id) + '\nURL: ' + (a.url || 'N/A') + '\nMIME: ' + (a.mimeType || 'unknown') + '\n\nTell me: which documents use this asset? Is it orphaned? Suggest alt text if it is an image.');
+  Cadence.askAi('Check this Sanity asset:\ncurl -s http://127.0.0.1:3800/api/plugins/sanity/assets/' + encodeURIComponent(a._id) + '/usage\n\nAsset: ' + (a.originalFilename || a._id) + '\nURL: ' + (a.url || 'N/A') + '\nMIME: ' + (a.mimeType || 'unknown') + '\n\nTell me: which documents use this asset? Is it orphaned? Suggest alt text if it is an image.');
 }
 
 // ============================================================================
@@ -2419,7 +2419,7 @@ function openJsonEditor() {
     var container = document.getElementById('editorContainer');
     if (monacoEditor) { monacoEditor.dispose(); monacoEditor = null; }
     monacoEditor = monaco.editor.create(container, {
-      value: content, language: 'json', theme: 'symphonee',
+      value: content, language: 'json', theme: 'cadence',
       fontSize: 13, fontFamily: "'Cascadia Code','Cascadia Mono',Consolas,'Courier New',monospace",
       minimap: { enabled: true }, scrollBeyondLastLine: false, wordWrap: 'off',
       automaticLayout: true, lineNumbers: 'on', renderWhitespace: 'selection',
@@ -2473,7 +2473,7 @@ function ensureMonaco() {
       require(['vs/editor/editor.main'], function() {
         monacoReady = true;
         var cs = getComputedStyle(document.documentElement);
-        monaco.editor.defineTheme('symphonee', {
+        monaco.editor.defineTheme('cadence', {
           base: 'vs-dark', inherit: true, rules: [],
           colors: {
             'editor.background': cs.getPropertyValue('--crust').trim(),
@@ -2631,7 +2631,7 @@ function iconSvg(name) {
 // ============================================================================
 // EVENT LISTENERS
 // ============================================================================
-Symphonee.on('tabActivated', function(d) {
+Cadence.on('tabActivated', function(d) {
   if (d.tab && d.tab.indexOf('sanity') !== -1) refresh();
 });
 
@@ -2641,7 +2641,7 @@ window.addEventListener('resize', function() {
 });
 
 window.addEventListener('message', function(e) {
-  if (!e.data || !e.data.__symphonee) return;
+  if (!e.data || !e.data.__cadence) return;
   if (e.data.type === 'configChanged' && e.data.plugin === 'sanity') {
     loadProjectSelector().then(function() { init(); });
   }

@@ -1,52 +1,26 @@
+﻿<#
+.SYNOPSIS
+    The dataset at a glance: types with counts, unpublished, changed, stale, assets, recent documents, issues, and what the repository schema declares.
+.EXAMPLE
+    ./scripts/Get-Health.ps1
+#>
+[CmdletBinding()]
 param(
-    [string]$ApiBase = "http://127.0.0.1:3800"
+    [string]$Project = ''
 )
-
-$h = Invoke-RestMethod "$ApiBase/api/plugins/sanity/health"
-
-if ($h.error) {
-    Write-Host "`n  Error: $($h.error)" -ForegroundColor Red
-    return
-}
-
-Write-Host "`n  === Sanity Content Health ===" -ForegroundColor Cyan
-Write-Host "  $(Get-Date -Format 'dddd, MMMM dd yyyy')" -ForegroundColor DarkGray
-Write-Host "  Project: $($h.projectId) | Dataset: $($h.dataset)" -ForegroundColor DarkGray
-
-Write-Host "`n  Document Types:   $($h.totalTypes)" -ForegroundColor White
-Write-Host "  Total Documents:  $($h.totalDocuments)" -ForegroundColor Green
-Write-Host "  Drafts:           $($h.draftsCount)" -ForegroundColor $(if ($h.draftsCount -gt 20) { "Yellow" } else { "White" })
-Write-Host "  Images:           $($h.assets.images)" -ForegroundColor White
-Write-Host "  Files:            $($h.assets.files)" -ForegroundColor White
-
-if ($h.repoPath) {
-    Write-Host "`n  Local Repo: $($h.repoPath)" -ForegroundColor DarkGray
-}
-if ($h.previewUrl) {
-    Write-Host "  Preview URL: $($h.previewUrl)" -ForegroundColor DarkGray
-}
-
-if ($h.issues -and $h.issues.Count -gt 0) {
-    Write-Host "`n  Issues:" -ForegroundColor Yellow
-    foreach ($iss in $h.issues) {
-        $color = if ($iss.level -eq 'warn') { "Yellow" } elseif ($iss.level -eq 'err') { "Red" } else { "DarkGray" }
-        Write-Host "    - $($iss.message)" -ForegroundColor $color
-    }
-}
-
-Write-Host "`n  Types Breakdown:" -ForegroundColor White
-foreach ($t in $h.types) {
-    Write-Host "    $($t.name): $($t.count)" -ForegroundColor DarkGray
-}
-
-if ($h.recent -and $h.recent.Count -gt 0) {
-    Write-Host "`n  Recent Activity:" -ForegroundColor White
-    foreach ($d in $h.recent | Select-Object -First 5) {
-        $title = if ($d.title) { $d.title } elseif ($d.name) { $d.name } elseif ($d.heading) { $d.heading } else { $d._id }
-        $updated = if ($d._updatedAt) { ([datetime]$d._updatedAt).ToString("MMM dd, yyyy") } else { "--" }
-        Write-Host "    $title" -ForegroundColor White -NoNewline
-        Write-Host "  $($d._type) - $updated" -ForegroundColor DarkGray
-    }
-}
-
-Write-Host ""
+$ErrorActionPreference = 'Stop'
+$CadenceApi = if ($env:CADENCE_API) { $env:CADENCE_API } else { 'http://127.0.0.1:3800' }
+$headers = @{}
+if ($env:CADENCE_TOKEN) { $headers['x-cadence-token'] = $env:CADENCE_TOKEN }
+# -Project names one of the configured Sanity projects; blank means the active one (or the one whose repository the shell is on).
+$proj = if ($PSBoundParameters.ContainsKey('Project') -and $Project) { "project=$([uri]::EscapeDataString($Project))" } elseif ($env:CADENCE_ACTIVE_REPO_PATH) { "repo=$([uri]::EscapeDataString($env:CADENCE_ACTIVE_REPO_PATH))" } else { '' }
+function With-Project($path) { if (-not $proj) { return $path }; if ($path.Contains('?')) { "$path&$proj" } else { "$path?$proj" } }
+function Get-Api($path) { Invoke-RestMethod -Uri "$CadenceApi$(With-Project $path)" -Headers $headers -TimeoutSec 300 }
+function Get-Text($path) { (Invoke-WebRequest -UseBasicParsing -Uri "$CadenceApi$(With-Project $path)" -Headers $headers -TimeoutSec 300).Content }
+function Post-Api($path, $payload) { Invoke-RestMethod -Uri "$CadenceApi$(With-Project $path)" -Method Post -Headers $headers -ContentType 'application/json; charset=utf-8' -Body ([System.Text.Encoding]::UTF8.GetBytes(($payload | ConvertTo-Json -Depth 20))) -TimeoutSec 300 }
+function Send-Api($method, $path, $payload) { $args = @{ Uri = "$CadenceApi$(With-Project $path)"; Method = $method; Headers = $headers; TimeoutSec = 300 }; if ($null -ne $payload) { $args.ContentType = 'application/json; charset=utf-8'; $args.Body = [System.Text.Encoding]::UTF8.GetBytes(($payload | ConvertTo-Json -Depth 20)) }; Invoke-RestMethod @args }
+function Esc($s) { [uri]::EscapeDataString([string]$s) }
+# -InputObject, not the pipeline: Windows PowerShell 5.1 wraps a piped JSON array in a {value, Count} object, and an empty one prints nothing.
+function Out-Json($o, $d = 12) { ConvertTo-Json -InputObject $o -Depth $d }
+function Read-JsonFile($file) { if (-not (Test-Path $file)) { throw "File not found: $file" }; ConvertFrom-Json -InputObject (Get-Content $file -Raw -Encoding UTF8) }
+Get-Api '/api/plugins/sanity/health' | ConvertTo-Json -Depth 8

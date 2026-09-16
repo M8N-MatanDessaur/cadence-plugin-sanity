@@ -1,295 +1,101 @@
 ## Sanity.io Plugin -- AI Instructions
 
-You have access to a full-featured Sanity.io CMS management plugin via the Symphonee API. This is a complete content management system -- the user should never need to open Sanity Studio separately. You can create, edit, delete, publish, audit, export, and generate content. You can also read the local codebase to discover schemas, components, and generate new ones.
+Sanity.io as a screen inside Cadence: the dataset's types and documents, each document editable field by field from the schema the repository declares, drafts and publishing with the Studio's own semantics, assets with alt text, insights, a GROQ console, the code side, and one script per action for every CLI. The user should not need to open the Studio.
 
-**All routes are at** `http://127.0.0.1:3800/api/plugins/sanity/`
+**All routes are at** `$CADENCE_API/api/plugins/sanity/` (the server that opened your shell; fallback `http://127.0.0.1:3800`). Mutating calls (`POST`, `PATCH`, `DELETE`) need the `x-cadence-token: $CADENCE_TOKEN` header. The scripts attach it for you.
 
-### IMPORTANT: Start with Context
+### Which project
 
-**Before doing ANY Sanity work, always fetch the project context first:**
+Several Sanity projects can be configured. Every route accepts `?project=<name>` or `?repo=<path>`; without either, the stored active project answers. The scripts pass `-Project <name>`, or the repository the shell is on (`CADENCE_ACTIVE_REPO_PATH`), automatically. API tokens never leave the server: `GET /projects` returns `apiTokenSet`, not the token.
 
-```bash
-# Full health check -- types, counts, drafts, assets, repo info, studio URL
-curl -s http://127.0.0.1:3800/api/plugins/sanity/health
-```
-
-This gives you: `projectId`, `dataset`, `previewUrl`, `repoPath`, `studioUrl`, document types with counts, drafts count, asset counts, recent activity, and issues.
-
-**Then use summaries to understand content structure:**
+### Start with context
 
 ```bash
-# Plain-text overview of all document types and counts
-curl -s http://127.0.0.1:3800/api/plugins/sanity/summary
-
-# Detailed summary of a specific type (fields + document previews)
-curl -s http://127.0.0.1:3800/api/plugins/sanity/summary/DOCUMENT_TYPE
+curl -s $CADENCE_API/api/plugins/sanity/health      # types with counts, unpublished, changed, stale, assets, recent, issues, schema standing
+curl -s $CADENCE_API/api/plugins/sanity/summary     # the same as plain text
+curl -s "$CADENCE_API/api/plugins/sanity/summary/press"   # one type: fields (from code or inferred) and every document previewed
 ```
 
-### Multi-Project Management
+### Scripts (prefer these)
 
-The plugin supports multiple Sanity projects. The active project is used for all operations.
+From bash: `powershell.exe -ExecutionPolicy Bypass -NoProfile -File "./dashboard/plugins/sanity/scripts/<Name>.ps1" -Param value`. From a PowerShell shell, run them directly. Every script prints JSON (arrays always as arrays) or plain text, and takes `-Project <name>` when the shell is not on the project's repository.
+
+| Script | Does | Parameters |
+|---|---|---|
+| `Get-Health.ps1` | The dataset at a glance | |
+| `Get-ProjectSummary.ps1` | Plain-text overview | |
+| `Get-DocumentTypes.ps1` | Types with counts and schema standing | |
+| `Get-TypeSummary.ps1` | One type: fields and documents, as text | `-Type` |
+| `Get-Schema.ps1` | Schema from the repository (one type with `-Type`, documents merged in) | `[-Type] [-Refresh]` |
+| `Get-Documents.ps1` | Documents of a type, one row each (status published / changed / draft) | `-Type [-Query] [-Status] [-Limit] [-Offset]` |
+| `Search-Documents.ps1` | Documents of any type by title, slug or id | `-Query` |
+| `Get-Document.ps1` | One document: both versions, references both ways, preview and Studio URLs | `-Id` |
+| `Get-Drafts.ps1` | Unpublished documents and pending changes | `[-Limit]` |
+| `Get-Insights.ps1` | Every document with a problem, by kind | `[-Kind changed\|draft\|stale\|missing-title\|missing-slug\|duplicate-slug\|missing-alt\|broken-ref\|missing-required]` |
+| `Audit-Content.ps1` | Issues in one type | `-Type` |
+| `Get-References.ps1` | Incoming and outgoing references | `-Type -Id` |
+| `Get-History.ps1` | Who changed a document and when | `-Id [-Limit]` |
+| `Run-Groq.ps1` | A GROQ query | `-Query [-Params '{"name":..}']` |
+| `New-Document.ps1` | Create from a JSON file, as a draft (or `-Publish`) | `-Type -JsonFile [-Publish]` |
+| `Save-Document.ps1` | Write a whole document as its draft (or `-Publish`) | `-Id -JsonFile [-Publish]` |
+| `Update-Document.ps1` | Set fields from a JSON file, `-Unset` fields | `-Type -Id [-JsonFile] [-Unset a,b]` |
+| `Publish-Document.ps1` | Draft becomes the published version | `-Type -Id` |
+| `Unpublish-Document.ps1` | Published version becomes a draft | `-Type -Id` |
+| `Discard-Draft.ps1` | Drop the draft, keep what is published | `-Type -Id` |
+| `Copy-Document.ps1` | Duplicate as a new draft | `-Id [-Title]` |
+| `Remove-Document.ps1` | Delete draft and published (checks references first) | `-Type -Id [-Force]` |
+| `Export-Documents.ps1` | Every document of a type as JSON | `-Type [-OutFile]` |
+| `Import-Documents.ps1` | createOrReplace from a JSON array | `-Type -JsonFile [-AsDrafts]` |
+| `Update-Documents.ps1` | Bulk patch from `[{id, set, unset}]` | `-Type -JsonFile` |
+| `Invoke-Mutations.ps1` | Raw mutations from a JSON array | `-JsonFile [-DryRun]` |
+| `Get-Assets.ps1` | Images and files with alt text | `[-Kind] [-Query] [-Limit] [-Offset]` |
+| `Get-AssetUsage.ps1` | Documents using an asset | `-Id` |
+| `Set-AssetAlt.ps1` | Alt text (title, description) on the asset itself | `-Id -AltText [-Title] [-Description]` |
+| `Remove-Asset.ps1` | Delete an unused asset | `-Id` |
+| `Get-Projects.ps1` / `Switch-Project.ps1` / `Switch-Environment.ps1` | Configured projects, the active one, the preview environment | `-Name` / `-Env` |
+| `Get-Datasets.ps1` / `Test-Connection.ps1` | Datasets of the project; does the token read the dataset | |
+| `Get-RepoInfo.ps1` / `Get-Schemas.ps1` / `Get-Components.ps1` / `Get-RepoFile.ps1` | The repository: framework, schema files, components, one file | `-Path` |
+| `Test-Preview.ps1` | Is a URL reachable | `-Url` |
+
+### Documents: drafts and publishing, as the Studio does it
+
+A document has up to two versions: `<id>` (published) and `drafts.<id>`. Status is `published` (no draft), `changed` (both exist; the draft is newer) or `draft` (never published).
+
+- Editing writes the draft: `POST /save { id, doc }` writes `drafts.<id>` in full (`publish: true` writes the published version and drops the draft).
+- `POST /documents/<type>/<id>/publish` copies the draft over the published version. `/unpublish` moves the published version to a draft. `/discard` drops the draft.
+- `POST /documents/<type>?draft=1` creates as a draft (the response carries `id` and `draftId`). `POST /duplicate { id }` copies as a new draft.
+- `PATCH /documents/<type>/<id>` with `{ set, unset }` patches the id as given: use `drafts.<id>` to patch the draft.
+- `DELETE /documents/<type>/<id>` removes both versions. Sanity refuses while another document references it; read `GET /documents/<type>/<id>/references` first.
 
 ```bash
-# List all projects
-curl -s http://127.0.0.1:3800/api/plugins/sanity/projects
-
-# Switch active project
-curl -s -X POST http://127.0.0.1:3800/api/plugins/sanity/projects/active \
-  -H "Content-Type: application/json" -d '{"name":"My Project"}'
-
-# Add a new project
-curl -s -X POST http://127.0.0.1:3800/api/plugins/sanity/projects \
-  -H "Content-Type: application/json" \
-  -d '{"name":"My Project","projectId":"abc123","dataset":"production","apiToken":"sk...","previewUrl":"https://mysite.com","repoPath":"C:/Code/my-site","studioUrl":"https://my-project.sanity.studio"}'
+curl -s "$CADENCE_API/api/plugins/sanity/entries?type=press&status=changed"     # one row per document
+curl -s "$CADENCE_API/api/plugins/sanity/document?id=press-article-1"           # both versions, refs resolved, incoming, previewUrl, studioUrl
+curl -s -X POST $CADENCE_API/api/plugins/sanity/save -H "Content-Type: application/json" -H "x-cadence-token: $CADENCE_TOKEN" -d '{"id":"press-article-1","doc":{"_type":"press","title":"..."}}'
 ```
 
-### Pre-Made Scripts (USE THESE -- faster, no tokens wasted)
+### The schema comes from the repository
 
-**From bash**, prefix all scripts with:
-```bash
-powershell.exe -ExecutionPolicy Bypass -NoProfile -File "./dashboard/plugins/sanity/scripts/ScriptName.ps1"
-# Or with parameters:
-powershell.exe -ExecutionPolicy Bypass -NoProfile -Command "./dashboard/plugins/sanity/scripts/ScriptName.ps1 -Param 'value'"
-```
+`GET /schema` reads every `defineType` / document literal in the project's repository (no build needed) and returns document types and object types with their fields: name, title, type, required, options.list, `of`, `to`, nested `fields`. `GET /schema?type=<name>` returns one type with fields the documents hold that the code does not name (`inferred: true`). Arrays whose members are spread in from elsewhere carry `anyObject: true`: any object type fits. Use it before writing a document so the shape matches: `_key` on every array item, `{ _type: 'slug', current }`, `{ _type: 'image', asset: { _type: 'reference', _ref } }`, `{ _type: 'reference', _ref }`, Portable Text as blocks (never HTML).
 
-| Script | Description | Parameters |
-|--------|-------------|------------|
-| `Get-ProjectSummary.ps1` | Full overview of all document types | |
-| `Get-Health.ps1` | Content health: types, drafts, assets, issues | |
-| `Get-DocumentTypes.ps1` | List document types in table format | |
-| `Get-Documents.ps1` | List documents of a type with field previews | `-Type "post" [-Limit 20]` |
-| `New-Document.ps1` | Create a new document from JSON file | `-Type "post" -JsonFile ".ai-workspace/doc.json"` |
-| `Update-Document.ps1` | Update document fields from JSON file | `-Type "post" -Id "doc-id" -JsonFile ".ai-workspace/patch.json"` |
-| `Remove-Document.ps1` | Delete a document | `-Type "post" -Id "doc-id" [-Force]` |
-| `Get-Drafts.ps1` | List all unpublished drafts | `[-Limit 50]` |
-| `Publish-Draft.ps1` | Publish a draft document | `-Id "drafts.doc-id"` |
-| `Get-Assets.ps1` | List image/file assets | `[-Type "image"] [-Limit 50]` |
-| `Run-Groq.ps1` | Execute a GROQ query | `-Query '*[_type == "post"]{title}'` |
-| `Audit-Content.ps1` | Audit a document type for issues | `-Type "post"` |
-| `Export-Documents.ps1` | Export all documents of a type | `-Type "post" [-OutFile "export.json"]` |
-| `Get-References.ps1` | Show incoming/outgoing references | `-Type "post" -Id "doc-id"` |
-| `Get-Schemas.ps1` | Find Sanity schema files in local repo | |
-| `Get-Components.ps1` | Find frontend components in local repo | |
-| `Get-RepoInfo.ps1` | Local repo info (framework, studio path) | |
-| `Switch-Project.ps1` | Switch the active Sanity project | `-Name "My Project"` |
+### Insights
 
-### Content Operations (CRUD)
+`GET /insights` reads up to 2500 documents and returns `counts` and `entries` with issues: `draft`, `changed`, `stale` (published, 90 days untouched), `missing-title`, `missing-slug`, `duplicate-slug`, `missing-alt` (with `images[]` paths), `broken-ref` (with `brokenRefs[]`), `missing-required:<field>`. Fix through the document routes; alt text lives either next to the image (`alt` field in the document) or on the asset (`PATCH /assets/<id> { altText }`).
 
-```bash
-# List documents of a type (paginated)
-curl -s "http://127.0.0.1:3800/api/plugins/sanity/documents/DOCUMENT_TYPE?limit=100&offset=0"
+### GROQ
 
-# Get a specific document
-curl -s http://127.0.0.1:3800/api/plugins/sanity/documents/DOCUMENT_TYPE/DOCUMENT_ID
+`POST /groq { query, params?, meta? }`. With `meta: true` the answer is `{ result, ms, took, count }`. Reads go through the API with the token, so drafts are visible; filter with `_id in path("drafts.**")` or `!(_id in path("drafts.**"))`.
 
-# Create a document
-curl -s -X POST http://127.0.0.1:3800/api/plugins/sanity/documents/DOCUMENT_TYPE \
-  -H "Content-Type: application/json" \
-  -d '{"title":"My Post","slug":{"_type":"slug","current":"my-post"}}'
+### Other routes
 
-# Update specific fields (partial patch)
-curl -s -X PATCH http://127.0.0.1:3800/api/plugins/sanity/documents/DOCUMENT_TYPE/DOCUMENT_ID \
-  -H "Content-Type: application/json" -d '{"title":"Updated Title"}'
+`GET /history?id=` (transactions with author and time), `GET /assets?type=&q=&limit=&offset=`, `GET /assets/<id>/usage`, `PATCH /assets/<id>`, `DELETE /assets/<id>`, `GET /datasets`, `GET /project-info`, `GET /repo/info`, `GET /repo/schemas`, `GET /repo/file/<path>`, `GET /repo/components`, `GET /repo/tree?path=`, `GET /preview-check?url=`, `GET /preview?url=` (the page proxied for an iframe), `GET /projects`, `POST /projects`, `PATCH /projects/<name>` (a blank `apiToken` keeps the stored one), `DELETE /projects/<name>`, `POST /projects/active { name }`, `POST /env { env }`, `POST /documents/<type>/export`, `/import`, `/bulk-update`, `POST /mutate`.
 
-# Delete a document
-curl -s -X DELETE http://127.0.0.1:3800/api/plugins/sanity/documents/DOCUMENT_TYPE/DOCUMENT_ID
-```
+### Rules
 
-### Draft Management
+- Read the schema and a type summary before creating content; match `_type` values and field names exactly.
+- Create as drafts unless told to publish. Never delete without checking references. Never edit or delete on the user's behalf from a read-only task (Ask).
+- Content lives in the Content Lake; the repository is for schema and component code only. Schema changes are code changes: open a shell on the repository.
+- Large datasets are paged (`limit`, `offset`); `entries` folds drafts into their published row.
 
-Sanity uses a `drafts.` prefix on document IDs for unpublished content.
+### Legacy (2.0 tab)
 
-```bash
-# List all drafts
-curl -s http://127.0.0.1:3800/api/plugins/sanity/drafts?limit=50
-
-# Publish a draft (copies to published ID, deletes draft)
-curl -s -X POST http://127.0.0.1:3800/api/plugins/sanity/drafts/DRAFT_ID/publish
-
-# Discard a draft (deletes without publishing)
-curl -s -X POST http://127.0.0.1:3800/api/plugins/sanity/drafts/DRAFT_ID/discard
-```
-
-### Document References
-
-```bash
-# Get incoming + outgoing references for a document
-curl -s http://127.0.0.1:3800/api/plugins/sanity/documents/DOCUMENT_TYPE/DOCUMENT_ID/references
-```
-
-Returns: `{ incoming: [{_id, _type, title}], outgoing: [{_ref, _path, title, resolvedType}] }`
-
-### Asset Management
-
-```bash
-# List assets (type: all, image, file)
-curl -s "http://127.0.0.1:3800/api/plugins/sanity/assets?type=image&limit=50"
-
-# Get documents using a specific asset
-curl -s http://127.0.0.1:3800/api/plugins/sanity/assets/ASSET_ID/usage
-```
-
-### Content Health & Audit
-
-```bash
-# Full project health check
-curl -s http://127.0.0.1:3800/api/plugins/sanity/health
-
-# Audit a specific document type (missing fields, stale content, drafts)
-curl -s http://127.0.0.1:3800/api/plugins/sanity/audit/DOCUMENT_TYPE
-```
-
-### GROQ Queries
-
-```bash
-# Simple query
-curl -s -X POST http://127.0.0.1:3800/api/plugins/sanity/groq \
-  -H "Content-Type: application/json" \
-  -d '{"query":"*[_type == \"post\"] | order(_createdAt desc) [0...10]{title, _id}"}'
-
-# With parameters
-curl -s -X POST http://127.0.0.1:3800/api/plugins/sanity/groq \
-  -H "Content-Type: application/json" \
-  -d '{"query":"*[_type == $type && title match $q]{title}","params":{"type":"post","q":"hello*"}}'
-```
-
-**GROQ tips:**
-- `*[_type == "typename"]` -- filter by type
-- `| order(field desc)` -- sorting
-- `[0...10]` -- pagination
-- `{field1, field2}` -- projections
-- `->` -- dereference references
-- `match` -- text search
-- `references($id)` -- find docs referencing another
-- `_id in path("drafts.**")` -- find drafts
-
-### Raw Mutations & Bulk Operations
-
-```bash
-# Raw mutations
-curl -s -X POST http://127.0.0.1:3800/api/plugins/sanity/mutate \
-  -H "Content-Type: application/json" \
-  -d '{"mutations":[{"create":{"_type":"post","title":"New"}}],"returnDocuments":true}'
-
-# Export all documents of a type
-curl -s -X POST http://127.0.0.1:3800/api/plugins/sanity/documents/DOCUMENT_TYPE/export
-
-# Import documents (createOrReplace)
-curl -s -X POST http://127.0.0.1:3800/api/plugins/sanity/documents/DOCUMENT_TYPE/import \
-  -H "Content-Type: application/json" -d '{"documents":[...]}'
-
-# Bulk update
-curl -s -X POST http://127.0.0.1:3800/api/plugins/sanity/documents/DOCUMENT_TYPE/bulk-update \
-  -H "Content-Type: application/json" -d '{"patches":[{"id":"doc1","set":{"featured":true}}]}'
-```
-
-### Local Repo Access (Schema & Component Discovery)
-
-When a local repo path is configured, you can read the codebase:
-
-```bash
-# Repo info (framework, studio path, etc.)
-curl -s http://127.0.0.1:3800/api/plugins/sanity/repo/info
-
-# Find Sanity schema files (searches common locations)
-curl -s http://127.0.0.1:3800/api/plugins/sanity/repo/schemas
-
-# Read a specific schema file
-curl -s http://127.0.0.1:3800/api/plugins/sanity/repo/schema/schemas/post.ts
-
-# Find frontend components
-curl -s http://127.0.0.1:3800/api/plugins/sanity/repo/components
-
-# Read any file from the repo
-curl -s http://127.0.0.1:3800/api/plugins/sanity/repo/file/src/components/Hero.tsx
-
-# Browse repo directory structure
-curl -s "http://127.0.0.1:3800/api/plugins/sanity/repo/tree?path=src/components"
-```
-
-### Key Workflows
-
-**1. Generate a New Page:**
-- Fetch schemas: `curl -s .../repo/schemas` to understand the page schema
-- Fetch existing pages: `curl -s .../summary/page` to see the structure
-- Create the document: `POST .../documents/page` with matching fields
-- Use existing component types from the schema for the `components` array
-
-**2. Generate Content for Existing Types:**
-- Use summary to discover field structure
-- Create realistic content matching the schema
-- POST to create each document
-
-**3. Add SEO Fields:**
-- Fetch the document, add/update SEO-related fields (title, description, slug, etc.)
-- PATCH to update only the SEO fields
-
-**4. Create New Sanity Components:**
-- Read existing schemas: `GET .../repo/schemas`
-- Read existing component code: `GET .../repo/components`
-- Generate new schema file matching patterns (defineType, defineField)
-- Generate new frontend component matching the project's patterns
-- Write files to the repo using the file system
-
-**5. Content Audit & Cleanup:**
-- Run health check: `GET .../health`
-- Audit specific types: `GET .../audit/TYPE`
-- Fix issues via PATCH or bulk-update
-
-**6. Draft Review & Publishing:**
-- List drafts: `GET .../drafts`
-- Review content, then publish: `POST .../drafts/ID/publish`
-- Or discard: `POST .../drafts/ID/discard`
-
-**7. Reference Integrity:**
-- Before deleting: `GET .../documents/TYPE/ID/references` to check what links to it
-- If incoming refs exist, warn the user before proceeding
-
-**8. Working Locally:**
-- The local repo path gives you direct access to the codebase
-- Read schemas to understand data structure
-- Read components to understand rendering patterns
-- Generate new schemas and components matching existing patterns
-- The Studio URL lets users open Sanity Studio for manual edits
-
-**9. Open in Sanity Studio:**
-- If studioUrl is configured, deep-link to edit a document:
-  `studioUrl + /intent/edit/id=DOCUMENT_ID`
-
-### Sanity-Specific Concepts
-
-**Document IDs:** Regular = auto-generated UUID, Drafts = `drafts.` prefix, Singletons = fixed ID (e.g. `siteSettings`)
-
-**References:** `{"_type": "reference", "_ref": "document-id"}`
-
-**Slugs:** `{"_type": "slug", "current": "my-page-slug"}`
-
-**Images:** `{"_type": "image", "asset": {"_type": "reference", "_ref": "image-asset-id"}}`
-
-**Portable Text:** Array of block objects with `_type: "block"`, `children`, `style`, `markDefs`
-
-**Component Arrays:** Pages often have a `components` array where each item has `_type` (component type), `_key` (unique key), and type-specific fields. Match existing component types when generating new content.
-
-### Opening in the Dashboard
-
-```bash
-# Open the Sanity tab
-curl -s -X POST http://127.0.0.1:3800/api/ui/view-plugin \
-  -H "Content-Type: application/json" -d '{"plugin":"sanity"}'
-
-# Open and navigate to a specific document type
-curl -s -X POST http://127.0.0.1:3800/api/ui/view-plugin \
-  -H "Content-Type: application/json" \
-  -d '{"plugin":"sanity","message":{"type":"openType","docType":"DOCUMENT_TYPE"}}'
-```
-
-### Important Notes
-
-- Content lives in the Sanity cloud (Content Lake) -- edits apply whether the frontend is local or deployed
-- Use the summary endpoint to discover field structure before creating content
-- Match existing component `_type` values exactly when generating page components
-- Portable Text is NOT HTML -- it's structured block data. Use the correct block format.
-- Always check references before deleting documents
-- The local repo path is for reading/writing code files (schemas, components), not for Sanity content
-- When generating new schema types or components, follow the patterns found in existing code
-- Large datasets are paginated -- use `limit` and `offset` query params
+The 2.0 center tab still works on the same routes. `GET /types`, `GET /documents/<type>`, `GET /documents/<type>/<id>`, `GET /drafts`, `POST /drafts/<id>/publish`, `/discard`, `GET /audit/<type>` are unchanged.

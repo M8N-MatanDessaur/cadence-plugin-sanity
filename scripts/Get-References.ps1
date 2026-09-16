@@ -1,37 +1,28 @@
+﻿<#
+.SYNOPSIS
+    What a document points at and what points at it.
+.EXAMPLE
+    ./scripts/Get-References.ps1 -Type press -Id press-article-1
+#>
+[CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)][string]$Type,
-    [Parameter(Mandatory = $true)][string]$Id,
-    [string]$ApiBase = "http://127.0.0.1:3800"
+    [Parameter(Mandatory)][string]$Type,
+    [Parameter(Mandatory)][string]$Id,
+    [string]$Project = ''
 )
-
-$r = Invoke-RestMethod "$ApiBase/api/plugins/sanity/documents/$Type/$Id/references"
-
-if ($r.error) {
-    Write-Host "`n  Error: $($r.error)" -ForegroundColor Red
-    return
-}
-
-Write-Host "`n  === References for $Id ===" -ForegroundColor Cyan
-
-Write-Host "`n  Incoming ($($r.incoming.Count)):" -ForegroundColor White
-if ($r.incoming.Count -eq 0) {
-    Write-Host "    (none)" -ForegroundColor DarkGray
-} else {
-    foreach ($ref in $r.incoming) {
-        $title = if ($ref.title) { $ref.title } elseif ($ref.name) { $ref.name } else { $ref._id }
-        Write-Host "    <- $title" -ForegroundColor Blue -NoNewline
-        Write-Host "  ($($ref._type))" -ForegroundColor DarkGray
-    }
-}
-
-Write-Host "`n  Outgoing ($($r.outgoing.Count)):" -ForegroundColor White
-if ($r.outgoing.Count -eq 0) {
-    Write-Host "    (none)" -ForegroundColor DarkGray
-} else {
-    foreach ($ref in $r.outgoing) {
-        $title = if ($ref.title) { $ref.title } else { $ref._ref }
-        Write-Host "    -> $title" -ForegroundColor Magenta -NoNewline
-        Write-Host "  ($($ref.resolvedType))" -ForegroundColor DarkGray
-    }
-}
-Write-Host ""
+$ErrorActionPreference = 'Stop'
+$CadenceApi = if ($env:CADENCE_API) { $env:CADENCE_API } else { 'http://127.0.0.1:3800' }
+$headers = @{}
+if ($env:CADENCE_TOKEN) { $headers['x-cadence-token'] = $env:CADENCE_TOKEN }
+# -Project names one of the configured Sanity projects; blank means the active one (or the one whose repository the shell is on).
+$proj = if ($PSBoundParameters.ContainsKey('Project') -and $Project) { "project=$([uri]::EscapeDataString($Project))" } elseif ($env:CADENCE_ACTIVE_REPO_PATH) { "repo=$([uri]::EscapeDataString($env:CADENCE_ACTIVE_REPO_PATH))" } else { '' }
+function With-Project($path) { if (-not $proj) { return $path }; if ($path.Contains('?')) { "$path&$proj" } else { "$path?$proj" } }
+function Get-Api($path) { Invoke-RestMethod -Uri "$CadenceApi$(With-Project $path)" -Headers $headers -TimeoutSec 300 }
+function Get-Text($path) { (Invoke-WebRequest -UseBasicParsing -Uri "$CadenceApi$(With-Project $path)" -Headers $headers -TimeoutSec 300).Content }
+function Post-Api($path, $payload) { Invoke-RestMethod -Uri "$CadenceApi$(With-Project $path)" -Method Post -Headers $headers -ContentType 'application/json; charset=utf-8' -Body ([System.Text.Encoding]::UTF8.GetBytes(($payload | ConvertTo-Json -Depth 20))) -TimeoutSec 300 }
+function Send-Api($method, $path, $payload) { $args = @{ Uri = "$CadenceApi$(With-Project $path)"; Method = $method; Headers = $headers; TimeoutSec = 300 }; if ($null -ne $payload) { $args.ContentType = 'application/json; charset=utf-8'; $args.Body = [System.Text.Encoding]::UTF8.GetBytes(($payload | ConvertTo-Json -Depth 20)) }; Invoke-RestMethod @args }
+function Esc($s) { [uri]::EscapeDataString([string]$s) }
+# -InputObject, not the pipeline: Windows PowerShell 5.1 wraps a piped JSON array in a {value, Count} object, and an empty one prints nothing.
+function Out-Json($o, $d = 12) { ConvertTo-Json -InputObject $o -Depth $d }
+function Read-JsonFile($file) { if (-not (Test-Path $file)) { throw "File not found: $file" }; ConvertFrom-Json -InputObject (Get-Content $file -Raw -Encoding UTF8) }
+Get-Api "/api/plugins/sanity/documents/$(Esc $Type)/$(Esc $Id)/references" | ConvertTo-Json -Depth 6

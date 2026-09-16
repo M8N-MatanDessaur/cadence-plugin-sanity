@@ -1,27 +1,30 @@
-# Symphonee Plugin: Sanity.io
+# Cadence Plugin: Sanity.io
 
-Manage Sanity.io datasets, document types, and documents directly from Symphonee.
+Sanity.io as a screen inside Cadence 3.0, and a center tab in 2.0. The dataset's types and documents, each document edited field by field from the schema the repository declares (no Studio build needed), drafts and publishing with the Studio's own semantics, assets with alt text, insights, a GROQ console, the code side, AI review and generation, and one PowerShell script per action so every CLI works the same way.
 
-## Features
+## The 3.0 surface
 
-- Browse document types and documents in a visual dashboard
-- Full CRUD operations on Sanity documents via REST API proxy
-- Run arbitrary GROQ queries
-- AI-powered content generation, auditing, and bulk operations
-- JSON editor with Monaco for direct document editing
-- Export/import and bulk update support
-- PowerShell helper scripts for quick CLI access
+- **Overview**: documents, unpublished, what to look at, whether the site is up; types, what changed last, what needs attention.
+- **Content**: types (content and singletons), a type's documents with draft and published folded into one row (published / changes pending / unpublished), and a document as a form: strings, text, numbers, switches, choices, dates, slugs, images and files (picked from the dataset), references (picked by type), Portable Text as rich text, arrays of objects as cards drawn from their own schema, nested objects, JSON for the rest. Save writes the draft; Publish, Unpublish, Discard, Delete, Duplicate; a preview of the page on the site; AI review, SEO and alt text; references, history.
+- **Insights**: unpublished, changed, stale, missing title or slug, duplicate slug, images without alt text, broken references, empty required fields.
+- **Assets**: grid, usage, alt text and title on the asset, delete when unused.
+- **GROQ**: Monaco console, results as JSON, documents in the result openable, history, useful queries.
+- **Studio**: schema files and which types they define, components, the repository's shape, a shell to work on it.
+- **Ask**: a question about the content, answered by the AI from read-only routes.
+- **Projects**: several projects, each with a dataset, a token (never shown again), a repository the screen follows, a Studio URL and preview environments.
+
+Scripts live in `scripts/` (40 of them; see `instructions.md`). The schema parser (`schema-parser.js`) reads `defineType` files without running them.
 
 ## Installation
 
 ### From plugin directory
-Copy this folder to your Symphonee plugins directory, or symlink it:
+Copy this folder to your Cadence plugins directory, or symlink it:
 ```bash
-mklink /D "%APPDATA%\symphonee\plugins\sanity" "C:\path\to\symphonee-plugin-sanity"
+mklink /D "%APPDATA%\cadence\plugins\sanity" "C:\path\to\cadence-plugin-sanity"
 ```
 
 ### Configuration
-1. Open Symphonee > Settings > Plugins
+1. Open Cadence > Settings > Plugins
 2. Enter your Sanity Project ID, Dataset, and API Token
 3. Click Test to verify the connection
 

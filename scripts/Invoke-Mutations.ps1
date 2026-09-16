@@ -1,11 +1,13 @@
 ﻿<#
 .SYNOPSIS
-    The repository of the project: framework, Sanity version, where the Studio config is, which types the schema declares.
+    Raw Sanity mutations from a JSON file (an array of create / createOrReplace / patch / delete); -DryRun validates without writing.
 .EXAMPLE
-    ./scripts/Get-RepoInfo.ps1
+    ./scripts/Invoke-Mutations.ps1 -JsonFile .ai-workspace/mutations.json -DryRun
 #>
 [CmdletBinding()]
 param(
+    [Parameter(Mandatory)][string]$JsonFile,
+    [switch]$DryRun,
     [string]$Project = ''
 )
 $ErrorActionPreference = 'Stop'
@@ -23,4 +25,5 @@ function Esc($s) { [uri]::EscapeDataString([string]$s) }
 # -InputObject, not the pipeline: Windows PowerShell 5.1 wraps a piped JSON array in a {value, Count} object, and an empty one prints nothing.
 function Out-Json($o, $d = 12) { ConvertTo-Json -InputObject $o -Depth $d }
 function Read-JsonFile($file) { if (-not (Test-Path $file)) { throw "File not found: $file" }; ConvertFrom-Json -InputObject (Get-Content $file -Raw -Encoding UTF8) }
-Get-Api '/api/plugins/sanity/repo/info' | ConvertTo-Json -Depth 5
+$m = @(Read-JsonFile $JsonFile)
+Post-Api '/api/plugins/sanity/mutate' @{ mutations = $m; returnIds = $true; dryRun = [bool]$DryRun } | ConvertTo-Json -Depth 8

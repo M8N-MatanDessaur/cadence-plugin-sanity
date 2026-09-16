@@ -1,36 +1,26 @@
+﻿<#
+.SYNOPSIS
+    The dataset as plain text: every type with counts and its schema standing.
+.EXAMPLE
+    ./scripts/Get-ProjectSummary.ps1
+#>
+[CmdletBinding()]
 param(
-    [string]$ApiBase = "http://127.0.0.1:3800"
+    [string]$Project = ''
 )
-
-$cfg = Invoke-RestMethod "$ApiBase/api/plugins/sanity/config"
-
-if (-not $cfg.configured) {
-    Write-Host "`n  Sanity not configured. Add credentials in Settings > Plugins.`n" -ForegroundColor Yellow
-    return
-}
-
-Write-Host "`n  === Sanity.io Project Overview ===" -ForegroundColor Cyan
-Write-Host "  $(Get-Date -Format 'dddd, MMMM dd yyyy')" -ForegroundColor DarkGray
-
-$test = Invoke-RestMethod "$ApiBase/api/plugins/sanity/test"
-if (-not $test.ok) {
-    Write-Host "  Connection failed: $($test.error)" -ForegroundColor Red
-    return
-}
-
-Write-Host "  Project: $($test.projectId) | Dataset: $($test.dataset)" -ForegroundColor DarkGray
-
-$types = Invoke-RestMethod "$ApiBase/api/plugins/sanity/types"
-if (-not $types) { $types = @() }
-
-$totalDocs = 0
-
-foreach ($dt in $types) {
-    $totalDocs += $dt.count
-    Write-Host "`n  $($dt.name)" -ForegroundColor White -NoNewline
-    Write-Host " ($($dt.count) documents)" -ForegroundColor DarkGray
-}
-
-Write-Host "`n  ─────────────────────────────────" -ForegroundColor DarkGray
-Write-Host "  Types: $($types.Count) | Total Documents: $totalDocs" -ForegroundColor White
-Write-Host ""
+$ErrorActionPreference = 'Stop'
+$CadenceApi = if ($env:CADENCE_API) { $env:CADENCE_API } else { 'http://127.0.0.1:3800' }
+$headers = @{}
+if ($env:CADENCE_TOKEN) { $headers['x-cadence-token'] = $env:CADENCE_TOKEN }
+# -Project names one of the configured Sanity projects; blank means the active one (or the one whose repository the shell is on).
+$proj = if ($PSBoundParameters.ContainsKey('Project') -and $Project) { "project=$([uri]::EscapeDataString($Project))" } elseif ($env:CADENCE_ACTIVE_REPO_PATH) { "repo=$([uri]::EscapeDataString($env:CADENCE_ACTIVE_REPO_PATH))" } else { '' }
+function With-Project($path) { if (-not $proj) { return $path }; if ($path.Contains('?')) { "$path&$proj" } else { "$path?$proj" } }
+function Get-Api($path) { Invoke-RestMethod -Uri "$CadenceApi$(With-Project $path)" -Headers $headers -TimeoutSec 300 }
+function Get-Text($path) { (Invoke-WebRequest -UseBasicParsing -Uri "$CadenceApi$(With-Project $path)" -Headers $headers -TimeoutSec 300).Content }
+function Post-Api($path, $payload) { Invoke-RestMethod -Uri "$CadenceApi$(With-Project $path)" -Method Post -Headers $headers -ContentType 'application/json; charset=utf-8' -Body ([System.Text.Encoding]::UTF8.GetBytes(($payload | ConvertTo-Json -Depth 20))) -TimeoutSec 300 }
+function Send-Api($method, $path, $payload) { $args = @{ Uri = "$CadenceApi$(With-Project $path)"; Method = $method; Headers = $headers; TimeoutSec = 300 }; if ($null -ne $payload) { $args.ContentType = 'application/json; charset=utf-8'; $args.Body = [System.Text.Encoding]::UTF8.GetBytes(($payload | ConvertTo-Json -Depth 20)) }; Invoke-RestMethod @args }
+function Esc($s) { [uri]::EscapeDataString([string]$s) }
+# -InputObject, not the pipeline: Windows PowerShell 5.1 wraps a piped JSON array in a {value, Count} object, and an empty one prints nothing.
+function Out-Json($o, $d = 12) { ConvertTo-Json -InputObject $o -Depth $d }
+function Read-JsonFile($file) { if (-not (Test-Path $file)) { throw "File not found: $file" }; ConvertFrom-Json -InputObject (Get-Content $file -Raw -Encoding UTF8) }
+Get-Text '/api/plugins/sanity/summary'

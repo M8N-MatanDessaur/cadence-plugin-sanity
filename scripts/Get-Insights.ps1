@@ -1,11 +1,12 @@
 ﻿<#
 .SYNOPSIS
-    The repository of the project: framework, Sanity version, where the Studio config is, which types the schema declares.
+    Every document with a problem: unpublished, changed, stale, missing title or slug, duplicate slug, images without alt text, broken references, empty required fields.
 .EXAMPLE
-    ./scripts/Get-RepoInfo.ps1
+    ./scripts/Get-Insights.ps1 -Kind missing-alt
 #>
 [CmdletBinding()]
 param(
+    [string]$Kind = '',
     [string]$Project = ''
 )
 $ErrorActionPreference = 'Stop'
@@ -23,4 +24,6 @@ function Esc($s) { [uri]::EscapeDataString([string]$s) }
 # -InputObject, not the pipeline: Windows PowerShell 5.1 wraps a piped JSON array in a {value, Count} object, and an empty one prints nothing.
 function Out-Json($o, $d = 12) { ConvertTo-Json -InputObject $o -Depth $d }
 function Read-JsonFile($file) { if (-not (Test-Path $file)) { throw "File not found: $file" }; ConvertFrom-Json -InputObject (Get-Content $file -Raw -Encoding UTF8) }
-Get-Api '/api/plugins/sanity/repo/info' | ConvertTo-Json -Depth 5
+$d = Get-Api '/api/plugins/sanity/insights'
+if ($Kind) { $d.entries = @($d.entries | Where-Object { $_.issues -contains $Kind -or ($Kind -eq 'missing-required' -and ($_.issues | Where-Object { $_ -like 'missing-required:*' })) }) }
+$d | ConvertTo-Json -Depth 8

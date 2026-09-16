@@ -1,23 +1,30 @@
+﻿<#
+.SYNOPSIS
+    Every document of a type (draft and published) as JSON, to a file with -OutFile or to the console.
+.EXAMPLE
+    ./scripts/Export-Documents.ps1 -Type press -OutFile .ai-workspace/press.json
+#>
+[CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)][string]$Type,
-    [string]$OutFile,
-    [string]$ApiBase = "http://127.0.0.1:3800"
+    [Parameter(Mandatory)][string]$Type,
+    [string]$OutFile = '',
+    [string]$Project = ''
 )
-
-$result = Invoke-RestMethod "$ApiBase/api/plugins/sanity/documents/$Type/export" -Method POST
-
-if ($result.error) {
-    Write-Host "`n  Error: $($result.error)" -ForegroundColor Red
-    return
-}
-
-$json = $result | ConvertTo-Json -Depth 20
-
-if ($OutFile) {
-    $json | Out-File -FilePath $OutFile -Encoding UTF8
-    Write-Host "`n  Exported $($result.Count) documents to $OutFile" -ForegroundColor Green
-} else {
-    Write-Host "`n  === Export: $Type ($($result.Count) documents) ===" -ForegroundColor Cyan
-    $json | Write-Host
-}
-Write-Host ""
+$ErrorActionPreference = 'Stop'
+$CadenceApi = if ($env:CADENCE_API) { $env:CADENCE_API } else { 'http://127.0.0.1:3800' }
+$headers = @{}
+if ($env:CADENCE_TOKEN) { $headers['x-cadence-token'] = $env:CADENCE_TOKEN }
+# -Project names one of the configured Sanity projects; blank means the active one (or the one whose repository the shell is on).
+$proj = if ($PSBoundParameters.ContainsKey('Project') -and $Project) { "project=$([uri]::EscapeDataString($Project))" } elseif ($env:CADENCE_ACTIVE_REPO_PATH) { "repo=$([uri]::EscapeDataString($env:CADENCE_ACTIVE_REPO_PATH))" } else { '' }
+function With-Project($path) { if (-not $proj) { return $path }; if ($path.Contains('?')) { "$path&$proj" } else { "$path?$proj" } }
+function Get-Api($path) { Invoke-RestMethod -Uri "$CadenceApi$(With-Project $path)" -Headers $headers -TimeoutSec 300 }
+function Get-Text($path) { (Invoke-WebRequest -UseBasicParsing -Uri "$CadenceApi$(With-Project $path)" -Headers $headers -TimeoutSec 300).Content }
+function Post-Api($path, $payload) { Invoke-RestMethod -Uri "$CadenceApi$(With-Project $path)" -Method Post -Headers $headers -ContentType 'application/json; charset=utf-8' -Body ([System.Text.Encoding]::UTF8.GetBytes(($payload | ConvertTo-Json -Depth 20))) -TimeoutSec 300 }
+function Send-Api($method, $path, $payload) { $args = @{ Uri = "$CadenceApi$(With-Project $path)"; Method = $method; Headers = $headers; TimeoutSec = 300 }; if ($null -ne $payload) { $args.ContentType = 'application/json; charset=utf-8'; $args.Body = [System.Text.Encoding]::UTF8.GetBytes(($payload | ConvertTo-Json -Depth 20)) }; Invoke-RestMethod @args }
+function Esc($s) { [uri]::EscapeDataString([string]$s) }
+# -InputObject, not the pipeline: Windows PowerShell 5.1 wraps a piped JSON array in a {value, Count} object, and an empty one prints nothing.
+function Out-Json($o, $d = 12) { ConvertTo-Json -InputObject $o -Depth $d }
+function Read-JsonFile($file) { if (-not (Test-Path $file)) { throw "File not found: $file" }; ConvertFrom-Json -InputObject (Get-Content $file -Raw -Encoding UTF8) }
+$docs = Post-Api "/api/plugins/sanity/documents/$(Esc $Type)/export" @{}
+$json = Out-Json @($docs) 30
+if ($OutFile) { [System.IO.File]::WriteAllText((Resolve-Path -LiteralPath (Split-Path -Parent $OutFile) -ErrorAction SilentlyContinue | ForEach-Object { Join-Path $_ (Split-Path -Leaf $OutFile) }), $json, [System.Text.UTF8Encoding]::new($false)); "Wrote $(@($docs).Count) documents to $OutFile" } else { $json }

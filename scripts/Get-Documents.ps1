@@ -1,48 +1,31 @@
+﻿<#
+.SYNOPSIS
+    Documents of a type, one row each with draft and published folded together: id, title, slug, status (published | changed | draft), updated.
+.EXAMPLE
+    ./scripts/Get-Documents.ps1 -Type press -Status draft
+#>
+[CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)][string]$Type,
-    [int]$Limit = 20,
-    [string]$ApiBase = "http://127.0.0.1:3800"
+    [Parameter(Mandatory)][string]$Type,
+    [string]$Query = '',
+    [ValidateSet('','published','changed','draft','unpublished')][string]$Status = '',
+    [int]$Limit = 50,
+    [int]$Offset = 0,
+    [string]$Project = ''
 )
-
-$cfg = Invoke-RestMethod "$ApiBase/api/plugins/sanity/config"
-
-if (-not $cfg.configured) {
-    Write-Host "`n  Sanity not configured. Add credentials in Settings > Plugins.`n" -ForegroundColor Yellow
-    return
-}
-
-$docs = Invoke-RestMethod "$ApiBase/api/plugins/sanity/documents/$Type`?limit=$Limit"
-
-if (-not $docs -or $docs.Count -eq 0) {
-    Write-Host "`n  No documents found for type '$Type'.`n" -ForegroundColor Yellow
-    return
-}
-
-Write-Host "`n  === $Type Documents ===" -ForegroundColor Cyan
-Write-Host "  Showing $($docs.Count) most recently updated" -ForegroundColor DarkGray
-
-foreach ($doc in $docs) {
-    $title = if ($doc.title) { $doc.title }
-             elseif ($doc.name) { $doc.name }
-             elseif ($doc.heading) { $doc.heading }
-             else { $doc._id }
-
-    $updated = if ($doc._updatedAt) {
-        ([datetime]$doc._updatedAt).ToString("MMM dd, yyyy")
-    } else { "--" }
-
-    Write-Host "`n  $title" -ForegroundColor White -NoNewline
-    Write-Host "  ($updated)" -ForegroundColor DarkGray
-
-    # Show a few data fields
-    $keys = $doc.PSObject.Properties.Name | Where-Object { -not $_.StartsWith('_') } | Select-Object -First 5
-    foreach ($k in $keys) {
-        $val = $doc.$k
-        if ($val -is [string]) { $val = $val.Substring(0, [Math]::Min($val.Length, 60)) }
-        elseif ($val -ne $null) { $val = ($val | ConvertTo-Json -Compress).Substring(0, [Math]::Min(60, ($val | ConvertTo-Json -Compress).Length)) }
-        else { $val = "(empty)" }
-        Write-Host "    $k`: $val" -ForegroundColor DarkGray
-    }
-}
-
-Write-Host "`n"
+$ErrorActionPreference = 'Stop'
+$CadenceApi = if ($env:CADENCE_API) { $env:CADENCE_API } else { 'http://127.0.0.1:3800' }
+$headers = @{}
+if ($env:CADENCE_TOKEN) { $headers['x-cadence-token'] = $env:CADENCE_TOKEN }
+# -Project names one of the configured Sanity projects; blank means the active one (or the one whose repository the shell is on).
+$proj = if ($PSBoundParameters.ContainsKey('Project') -and $Project) { "project=$([uri]::EscapeDataString($Project))" } elseif ($env:CADENCE_ACTIVE_REPO_PATH) { "repo=$([uri]::EscapeDataString($env:CADENCE_ACTIVE_REPO_PATH))" } else { '' }
+function With-Project($path) { if (-not $proj) { return $path }; if ($path.Contains('?')) { "$path&$proj" } else { "$path?$proj" } }
+function Get-Api($path) { Invoke-RestMethod -Uri "$CadenceApi$(With-Project $path)" -Headers $headers -TimeoutSec 300 }
+function Get-Text($path) { (Invoke-WebRequest -UseBasicParsing -Uri "$CadenceApi$(With-Project $path)" -Headers $headers -TimeoutSec 300).Content }
+function Post-Api($path, $payload) { Invoke-RestMethod -Uri "$CadenceApi$(With-Project $path)" -Method Post -Headers $headers -ContentType 'application/json; charset=utf-8' -Body ([System.Text.Encoding]::UTF8.GetBytes(($payload | ConvertTo-Json -Depth 20))) -TimeoutSec 300 }
+function Send-Api($method, $path, $payload) { $args = @{ Uri = "$CadenceApi$(With-Project $path)"; Method = $method; Headers = $headers; TimeoutSec = 300 }; if ($null -ne $payload) { $args.ContentType = 'application/json; charset=utf-8'; $args.Body = [System.Text.Encoding]::UTF8.GetBytes(($payload | ConvertTo-Json -Depth 20)) }; Invoke-RestMethod @args }
+function Esc($s) { [uri]::EscapeDataString([string]$s) }
+# -InputObject, not the pipeline: Windows PowerShell 5.1 wraps a piped JSON array in a {value, Count} object, and an empty one prints nothing.
+function Out-Json($o, $d = 12) { ConvertTo-Json -InputObject $o -Depth $d }
+function Read-JsonFile($file) { if (-not (Test-Path $file)) { throw "File not found: $file" }; ConvertFrom-Json -InputObject (Get-Content $file -Raw -Encoding UTF8) }
+Get-Api "/api/plugins/sanity/entries?type=$(Esc $Type)&q=$(Esc $Query)&status=$Status&limit=$Limit&offset=$Offset" | ConvertTo-Json -Depth 6

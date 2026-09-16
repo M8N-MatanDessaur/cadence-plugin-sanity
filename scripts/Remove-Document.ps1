@@ -1,23 +1,33 @@
+﻿<#
+.SYNOPSIS
+    Deletes a document, draft and published. Refuses while another document references it unless -Force; -Force does not bypass Sanity's own check.
+.EXAMPLE
+    ./scripts/Remove-Document.ps1 -Type press -Id press-article-9
+#>
+[CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)][string]$Type,
-    [Parameter(Mandatory = $true)][string]$Id,
+    [Parameter(Mandatory)][string]$Type,
+    [Parameter(Mandatory)][string]$Id,
     [switch]$Force,
-    [string]$ApiBase = "http://127.0.0.1:3800"
+    [string]$Project = ''
 )
-
+$ErrorActionPreference = 'Stop'
+$CadenceApi = if ($env:CADENCE_API) { $env:CADENCE_API } else { 'http://127.0.0.1:3800' }
+$headers = @{}
+if ($env:CADENCE_TOKEN) { $headers['x-cadence-token'] = $env:CADENCE_TOKEN }
+# -Project names one of the configured Sanity projects; blank means the active one (or the one whose repository the shell is on).
+$proj = if ($PSBoundParameters.ContainsKey('Project') -and $Project) { "project=$([uri]::EscapeDataString($Project))" } elseif ($env:CADENCE_ACTIVE_REPO_PATH) { "repo=$([uri]::EscapeDataString($env:CADENCE_ACTIVE_REPO_PATH))" } else { '' }
+function With-Project($path) { if (-not $proj) { return $path }; if ($path.Contains('?')) { "$path&$proj" } else { "$path?$proj" } }
+function Get-Api($path) { Invoke-RestMethod -Uri "$CadenceApi$(With-Project $path)" -Headers $headers -TimeoutSec 300 }
+function Get-Text($path) { (Invoke-WebRequest -UseBasicParsing -Uri "$CadenceApi$(With-Project $path)" -Headers $headers -TimeoutSec 300).Content }
+function Post-Api($path, $payload) { Invoke-RestMethod -Uri "$CadenceApi$(With-Project $path)" -Method Post -Headers $headers -ContentType 'application/json; charset=utf-8' -Body ([System.Text.Encoding]::UTF8.GetBytes(($payload | ConvertTo-Json -Depth 20))) -TimeoutSec 300 }
+function Send-Api($method, $path, $payload) { $args = @{ Uri = "$CadenceApi$(With-Project $path)"; Method = $method; Headers = $headers; TimeoutSec = 300 }; if ($null -ne $payload) { $args.ContentType = 'application/json; charset=utf-8'; $args.Body = [System.Text.Encoding]::UTF8.GetBytes(($payload | ConvertTo-Json -Depth 20)) }; Invoke-RestMethod @args }
+function Esc($s) { [uri]::EscapeDataString([string]$s) }
+# -InputObject, not the pipeline: Windows PowerShell 5.1 wraps a piped JSON array in a {value, Count} object, and an empty one prints nothing.
+function Out-Json($o, $d = 12) { ConvertTo-Json -InputObject $o -Depth $d }
+function Read-JsonFile($file) { if (-not (Test-Path $file)) { throw "File not found: $file" }; ConvertFrom-Json -InputObject (Get-Content $file -Raw -Encoding UTF8) }
 if (-not $Force) {
-    $confirm = Read-Host "  Delete document '$Id' of type '$Type'? (y/N)"
-    if ($confirm -ne 'y') {
-        Write-Host "  Cancelled.`n" -ForegroundColor DarkGray
-        return
-    }
+  $refs = Get-Api "/api/plugins/sanity/documents/$(Esc $Type)/$(Esc $Id)/references"
+  if ($refs.incoming.Count -gt 0) { throw "$($refs.incoming.Count) document(s) reference $Id ($(($refs.incoming | ForEach-Object { $_._id }) -join ', ')). Change them first, or pass -Force to try anyway." }
 }
-
-$result = Invoke-RestMethod "$ApiBase/api/plugins/sanity/documents/$Type/$Id" -Method DELETE
-
-if ($result.error) {
-    Write-Host "`n  Error: $($result.error)" -ForegroundColor Red
-} elseif ($result.ok) {
-    Write-Host "`n  Deleted document '$Id'" -ForegroundColor Green
-}
-Write-Host ""
+Send-Api 'DELETE' "/api/plugins/sanity/documents/$(Esc $Type)/$(Esc $Id)" $null | ConvertTo-Json

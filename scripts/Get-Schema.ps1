@@ -1,11 +1,13 @@
 ﻿<#
 .SYNOPSIS
-    The repository of the project: framework, Sanity version, where the Studio config is, which types the schema declares.
+    The schema the repository declares: document types and object types with their fields (one type in full with -Type, documents merged in).
 .EXAMPLE
-    ./scripts/Get-RepoInfo.ps1
+    ./scripts/Get-Schema.ps1 -Type page
 #>
 [CmdletBinding()]
 param(
+    [string]$Type = '',
+    [switch]$Refresh,
     [string]$Project = ''
 )
 $ErrorActionPreference = 'Stop'
@@ -23,4 +25,5 @@ function Esc($s) { [uri]::EscapeDataString([string]$s) }
 # -InputObject, not the pipeline: Windows PowerShell 5.1 wraps a piped JSON array in a {value, Count} object, and an empty one prints nothing.
 function Out-Json($o, $d = 12) { ConvertTo-Json -InputObject $o -Depth $d }
 function Read-JsonFile($file) { if (-not (Test-Path $file)) { throw "File not found: $file" }; ConvertFrom-Json -InputObject (Get-Content $file -Raw -Encoding UTF8) }
-Get-Api '/api/plugins/sanity/repo/info' | ConvertTo-Json -Depth 5
+$q = @(); if ($Type) { $q += "type=$(Esc $Type)" }; if ($Refresh) { $q += 'refresh=1' }
+Get-Api "/api/plugins/sanity/schema$(if ($q.Count) { '?' + ($q -join '&') })" | ConvertTo-Json -Depth 20

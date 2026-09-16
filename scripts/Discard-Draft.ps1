@@ -1,11 +1,13 @@
 ﻿<#
 .SYNOPSIS
-    The repository of the project: framework, Sanity version, where the Studio config is, which types the schema declares.
+    Drops the draft of a document, keeping whatever is published.
 .EXAMPLE
-    ./scripts/Get-RepoInfo.ps1
+    ./scripts/Discard-Draft.ps1 -Type press -Id press-article-1
 #>
 [CmdletBinding()]
 param(
+    [Parameter(Mandatory)][string]$Type,
+    [Parameter(Mandatory)][string]$Id,
     [string]$Project = ''
 )
 $ErrorActionPreference = 'Stop'
@@ -23,4 +25,4 @@ function Esc($s) { [uri]::EscapeDataString([string]$s) }
 # -InputObject, not the pipeline: Windows PowerShell 5.1 wraps a piped JSON array in a {value, Count} object, and an empty one prints nothing.
 function Out-Json($o, $d = 12) { ConvertTo-Json -InputObject $o -Depth $d }
 function Read-JsonFile($file) { if (-not (Test-Path $file)) { throw "File not found: $file" }; ConvertFrom-Json -InputObject (Get-Content $file -Raw -Encoding UTF8) }
-Get-Api '/api/plugins/sanity/repo/info' | ConvertTo-Json -Depth 5
+Post-Api "/api/plugins/sanity/documents/$(Esc $Type)/$(Esc $Id)/discard" @{} | ConvertTo-Json

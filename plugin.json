@@ -1,8 +1,8 @@
 {
   "id": "sanity",
   "name": "Sanity",
-  "version": "1.3.1",
-  "description": "Manage Sanity.io datasets, document types, and documents with AI-powered actions",
+  "version": "2.0.2",
+  "description": "Sanity.io as a screen: types, documents edited field by field from the repository schema, drafts and publishing, assets, insights, GROQ, the Studio code, and scripts for every CLI.",
   "icon": "database",
   "tint": "242, 77, 52",
   "instructions": "instructions.md",
@@ -20,7 +20,9 @@
     "sanity project",
     "content lake"
   ],
-  "activationConditions": { "always": true },
+  "activationConditions": {
+    "always": true
+  },
   "settings": [],
   "contributions": {
     "settingsHtml": "settings.html",
@@ -32,6 +34,502 @@
         "html": "tab.html"
       }
     ],
-    "routes": "routes.js"
-  }
+    "routes": "routes.js",
+    "surfaces": [
+      {
+        "id": "sanity",
+        "title": "Sanity",
+        "icon": "database",
+        "mount": "rail",
+        "entry": "ui/sanity.js",
+        "sidebar": true,
+        "aside": true
+      }
+    ],
+    "scripts": [
+      {
+        "file": "Get-Health.ps1",
+        "label": "Health",
+        "description": "Types, counts, drafts, stale, assets, issues.",
+        "args": []
+      },
+      {
+        "file": "Get-ProjectSummary.ps1",
+        "label": "Summary",
+        "description": "Plain-text overview of every type.",
+        "args": []
+      },
+      {
+        "file": "Get-DocumentTypes.ps1",
+        "label": "Types",
+        "description": "Every document type with its counts.",
+        "args": []
+      },
+      {
+        "file": "Get-TypeSummary.ps1",
+        "label": "Type summary",
+        "description": "Fields and documents of one type, as text.",
+        "args": [
+          {
+            "name": "Type",
+            "label": "Type"
+          }
+        ]
+      },
+      {
+        "file": "Get-Schema.ps1",
+        "label": "Schema",
+        "description": "Document and object types from the repository.",
+        "args": [
+          {
+            "name": "Type",
+            "label": "Type",
+            "default": ""
+          }
+        ]
+      },
+      {
+        "file": "Get-Documents.ps1",
+        "label": "Documents",
+        "description": "Documents of a type, one row each.",
+        "args": [
+          {
+            "name": "Type",
+            "label": "Type"
+          },
+          {
+            "name": "Query",
+            "label": "Search",
+            "default": ""
+          },
+          {
+            "name": "Status",
+            "label": "'' | published | changed | draft",
+            "default": ""
+          }
+        ]
+      },
+      {
+        "file": "Search-Documents.ps1",
+        "label": "Search",
+        "description": "Find documents by title, slug or id.",
+        "args": [
+          {
+            "name": "Query",
+            "label": "Text"
+          }
+        ]
+      },
+      {
+        "file": "Get-Document.ps1",
+        "label": "Read a document",
+        "description": "Published and draft versions with references.",
+        "args": [
+          {
+            "name": "Id",
+            "label": "Document id"
+          }
+        ]
+      },
+      {
+        "file": "Get-Drafts.ps1",
+        "label": "Drafts",
+        "description": "Unpublished documents and pending changes.",
+        "args": []
+      },
+      {
+        "file": "Get-Insights.ps1",
+        "label": "Insights",
+        "description": "Documents with a problem, by kind.",
+        "args": [
+          {
+            "name": "Kind",
+            "label": "changed | draft | stale | missing-title | missing-slug | duplicate-slug | missing-alt | broken-ref | missing-required",
+            "default": ""
+          }
+        ]
+      },
+      {
+        "file": "Audit-Content.ps1",
+        "label": "Audit a type",
+        "description": "Issues in the documents of one type.",
+        "args": [
+          {
+            "name": "Type",
+            "label": "Type"
+          }
+        ]
+      },
+      {
+        "file": "Get-References.ps1",
+        "label": "References",
+        "description": "Incoming and outgoing references of a document.",
+        "args": [
+          {
+            "name": "Type",
+            "label": "Type"
+          },
+          {
+            "name": "Id",
+            "label": "Document id"
+          }
+        ]
+      },
+      {
+        "file": "Get-History.ps1",
+        "label": "History",
+        "description": "Transactions on a document.",
+        "args": [
+          {
+            "name": "Id",
+            "label": "Document id"
+          }
+        ]
+      },
+      {
+        "file": "Run-Groq.ps1",
+        "label": "Run GROQ",
+        "description": "A GROQ query against the dataset.",
+        "args": [
+          {
+            "name": "Query",
+            "label": "GROQ"
+          },
+          {
+            "name": "Params",
+            "label": "Params (JSON)",
+            "default": ""
+          }
+        ]
+      },
+      {
+        "file": "New-Document.ps1",
+        "label": "New document",
+        "description": "Creates a document from a JSON file (draft by default).",
+        "mutates": true,
+        "args": [
+          {
+            "name": "Type",
+            "label": "Type"
+          },
+          {
+            "name": "JsonFile",
+            "label": "JSON file"
+          }
+        ]
+      },
+      {
+        "file": "Save-Document.ps1",
+        "label": "Save a document",
+        "description": "Writes the draft of a document from a JSON file.",
+        "mutates": true,
+        "args": [
+          {
+            "name": "Id",
+            "label": "Document id"
+          },
+          {
+            "name": "JsonFile",
+            "label": "JSON file"
+          }
+        ]
+      },
+      {
+        "file": "Update-Document.ps1",
+        "label": "Update fields",
+        "description": "Sets or unsets fields on a document.",
+        "mutates": true,
+        "args": [
+          {
+            "name": "Type",
+            "label": "Type"
+          },
+          {
+            "name": "Id",
+            "label": "Document id"
+          },
+          {
+            "name": "JsonFile",
+            "label": "JSON file of fields",
+            "default": ""
+          }
+        ]
+      },
+      {
+        "file": "Publish-Document.ps1",
+        "label": "Publish",
+        "description": "Publishes the draft of a document.",
+        "mutates": true,
+        "args": [
+          {
+            "name": "Type",
+            "label": "Type"
+          },
+          {
+            "name": "Id",
+            "label": "Document id"
+          }
+        ]
+      },
+      {
+        "file": "Unpublish-Document.ps1",
+        "label": "Unpublish",
+        "description": "Moves the published version back to a draft.",
+        "mutates": true,
+        "args": [
+          {
+            "name": "Type",
+            "label": "Type"
+          },
+          {
+            "name": "Id",
+            "label": "Document id"
+          }
+        ]
+      },
+      {
+        "file": "Discard-Draft.ps1",
+        "label": "Discard a draft",
+        "description": "Drops pending changes.",
+        "mutates": true,
+        "args": [
+          {
+            "name": "Type",
+            "label": "Type"
+          },
+          {
+            "name": "Id",
+            "label": "Document id"
+          }
+        ]
+      },
+      {
+        "file": "Copy-Document.ps1",
+        "label": "Duplicate",
+        "description": "Copies a document as a new draft.",
+        "mutates": true,
+        "args": [
+          {
+            "name": "Id",
+            "label": "Document id"
+          }
+        ]
+      },
+      {
+        "file": "Remove-Document.ps1",
+        "label": "Delete a document",
+        "description": "Deletes a document (checks references first).",
+        "mutates": true,
+        "args": [
+          {
+            "name": "Type",
+            "label": "Type"
+          },
+          {
+            "name": "Id",
+            "label": "Document id"
+          }
+        ]
+      },
+      {
+        "file": "Export-Documents.ps1",
+        "label": "Export a type",
+        "description": "Every document of a type as JSON.",
+        "args": [
+          {
+            "name": "Type",
+            "label": "Type"
+          },
+          {
+            "name": "OutFile",
+            "label": "File",
+            "default": ""
+          }
+        ]
+      },
+      {
+        "file": "Import-Documents.ps1",
+        "label": "Import documents",
+        "description": "createOrReplace from a JSON array.",
+        "mutates": true,
+        "args": [
+          {
+            "name": "Type",
+            "label": "Type"
+          },
+          {
+            "name": "JsonFile",
+            "label": "JSON file"
+          }
+        ]
+      },
+      {
+        "file": "Update-Documents.ps1",
+        "label": "Bulk update",
+        "description": "Patches many documents at once.",
+        "mutates": true,
+        "args": [
+          {
+            "name": "Type",
+            "label": "Type"
+          },
+          {
+            "name": "JsonFile",
+            "label": "JSON file of patches"
+          }
+        ]
+      },
+      {
+        "file": "Invoke-Mutations.ps1",
+        "label": "Raw mutations",
+        "description": "Runs a mutations array.",
+        "mutates": true,
+        "args": [
+          {
+            "name": "JsonFile",
+            "label": "JSON file of mutations"
+          }
+        ]
+      },
+      {
+        "file": "Get-Assets.ps1",
+        "label": "Assets",
+        "description": "Images and files with alt text.",
+        "args": [
+          {
+            "name": "Kind",
+            "label": "all | image | file",
+            "default": "all"
+          },
+          {
+            "name": "Query",
+            "label": "File name",
+            "default": ""
+          }
+        ]
+      },
+      {
+        "file": "Get-AssetUsage.ps1",
+        "label": "Asset usage",
+        "description": "Documents using an asset.",
+        "args": [
+          {
+            "name": "Id",
+            "label": "Asset id"
+          }
+        ]
+      },
+      {
+        "file": "Set-AssetAlt.ps1",
+        "label": "Set asset alt text",
+        "description": "Alt text on the asset itself.",
+        "mutates": true,
+        "args": [
+          {
+            "name": "Id",
+            "label": "Asset id"
+          },
+          {
+            "name": "AltText",
+            "label": "Alt text"
+          }
+        ]
+      },
+      {
+        "file": "Remove-Asset.ps1",
+        "label": "Delete an asset",
+        "description": "Deletes an unused asset.",
+        "mutates": true,
+        "args": [
+          {
+            "name": "Id",
+            "label": "Asset id"
+          }
+        ]
+      },
+      {
+        "file": "Get-Projects.ps1",
+        "label": "Projects",
+        "description": "Configured projects.",
+        "args": []
+      },
+      {
+        "file": "Switch-Project.ps1",
+        "label": "Switch project",
+        "description": "Sets the active project.",
+        "mutates": true,
+        "args": [
+          {
+            "name": "Name",
+            "label": "Project name"
+          }
+        ]
+      },
+      {
+        "file": "Switch-Environment.ps1",
+        "label": "Switch environment",
+        "description": "Which site URL previews use.",
+        "mutates": true,
+        "args": [
+          {
+            "name": "Env",
+            "label": "Environment id"
+          }
+        ]
+      },
+      {
+        "file": "Get-Datasets.ps1",
+        "label": "Datasets",
+        "description": "Datasets of the project.",
+        "args": []
+      },
+      {
+        "file": "Test-Connection.ps1",
+        "label": "Test the token",
+        "description": "Reads the dataset with the token.",
+        "args": []
+      },
+      {
+        "file": "Get-RepoInfo.ps1",
+        "label": "Repository",
+        "description": "Framework, Studio, declared types.",
+        "args": []
+      },
+      {
+        "file": "Get-Schemas.ps1",
+        "label": "Schema files",
+        "description": "Files in the repository that define types.",
+        "args": []
+      },
+      {
+        "file": "Get-Components.ps1",
+        "label": "Components",
+        "description": "Component files in the repository.",
+        "args": []
+      },
+      {
+        "file": "Get-RepoFile.ps1",
+        "label": "Read a file",
+        "description": "One file from the repository.",
+        "args": [
+          {
+            "name": "Path",
+            "label": "Relative path"
+          }
+        ]
+      },
+      {
+        "file": "Test-Preview.ps1",
+        "label": "Test a URL",
+        "description": "Is the page reachable?",
+        "args": [
+          {
+            "name": "Url",
+            "label": "URL"
+          }
+        ]
+      }
+    ]
+  },
+  "sdkVersion": 3
 }

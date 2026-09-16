@@ -1,11 +1,13 @@
 ﻿<#
 .SYNOPSIS
-    The repository of the project: framework, Sanity version, where the Studio config is, which types the schema declares.
+    Who changed a document and when: the transactions on its published and draft versions.
 .EXAMPLE
-    ./scripts/Get-RepoInfo.ps1
+    ./scripts/Get-History.ps1 -Id press-article-1
 #>
 [CmdletBinding()]
 param(
+    [Parameter(Mandatory)][string]$Id,
+    [int]$Limit = 30,
     [string]$Project = ''
 )
 $ErrorActionPreference = 'Stop'
@@ -23,4 +25,4 @@ function Esc($s) { [uri]::EscapeDataString([string]$s) }
 # -InputObject, not the pipeline: Windows PowerShell 5.1 wraps a piped JSON array in a {value, Count} object, and an empty one prints nothing.
 function Out-Json($o, $d = 12) { ConvertTo-Json -InputObject $o -Depth $d }
 function Read-JsonFile($file) { if (-not (Test-Path $file)) { throw "File not found: $file" }; ConvertFrom-Json -InputObject (Get-Content $file -Raw -Encoding UTF8) }
-Get-Api '/api/plugins/sanity/repo/info' | ConvertTo-Json -Depth 5
+Get-Api "/api/plugins/sanity/history?id=$(Esc $Id)&limit=$Limit" | ConvertTo-Json -Depth 6
