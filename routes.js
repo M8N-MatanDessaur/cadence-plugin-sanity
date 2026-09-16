@@ -219,7 +219,20 @@ async function fetchAll(cfg, filter, projection, cap, params) {
 
 const baseId = (id) => String(id || '').replace(/^drafts\./, '');
 const draftId = (id) => 'drafts.' + baseId(id);
-const titleOf = (d) => (d && (d.title || d.name || d.heading || d.headline || d.label || (d.seo && d.seo.title) || (d.slug && d.slug.current) || d._id)) || '';
+// A title in a localized document is an object ({ _type, en, fr } or one language alone);
+// handed to the screen as-is it crashed the whole surface. Text, always.
+const textOf = (v, depth = 0) => {
+  if (v == null || depth > 6) return '';
+  if (typeof v === 'string') return v;
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+  if (Array.isArray(v)) { for (const x of v) { const t = textOf(x, depth + 1); if (t) return t; } return ''; }
+  if (typeof v === 'object') {
+    for (const k of ['en', 'en_US', 'en-US', 'fr', 'current', 'value', 'text', 'title', 'name']) { const t = textOf(v[k], depth + 1); if (t) return t; }
+    for (const [k, x] of Object.entries(v)) { if (k.startsWith('_') || k === 'marks') continue; const t = textOf(x, depth + 1); if (t) return t; }
+  }
+  return '';
+};
+const titleOf = (d) => (d && (textOf(d.title) || textOf(d.name) || textOf(d.heading) || textOf(d.headline) || textOf(d.label) || (d.seo && textOf(d.seo.title)) || (d.slug && textOf(d.slug.current)) || d._id)) || '';
 const slugOf = (d) => (d && d.slug ? (typeof d.slug === 'string' ? d.slug : d.slug.current || '') : '');
 const newKey = () => crypto.randomBytes(6).toString('hex');
 const newId = () => crypto.randomUUID ? crypto.randomUUID() : crypto.randomBytes(16).toString('hex');

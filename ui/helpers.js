@@ -48,7 +48,18 @@ export async function askModel(api, { prompt, system, maxTokens = 900, from = 's
   return text;
 }
 
-export const titleOf = (d) => (d && (d.title || d.name || d.heading || d.headline || d.label || (d.slug && d.slug.current) || d._id)) || '';
+export const textOf = (v, depth = 0) => {
+  if (v == null || depth > 6) return '';
+  if (typeof v === 'string') return v;
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+  if (Array.isArray(v)) { for (const x of v) { const t = textOf(x, depth + 1); if (t) return t; } return ''; }
+  if (typeof v === 'object') {
+    for (const k of ['en', 'en_US', 'en-US', 'fr', 'current', 'value', 'text', 'title', 'name']) { const t = textOf(v[k], depth + 1); if (t) return t; }
+    for (const [k, x] of Object.entries(v)) { if (k.startsWith('_') || k === 'marks') continue; const t = textOf(x, depth + 1); if (t) return t; }
+  }
+  return '';
+};
+export const titleOf = (d) => (d && (textOf(d.title) || textOf(d.name) || textOf(d.heading) || textOf(d.headline) || textOf(d.label) || (d.slug && textOf(d.slug.current)) || d._id)) || '';
 export const slugOf = (d) => (d && d.slug ? (typeof d.slug === 'string' ? d.slug : d.slug.current || '') : '');
 export const newKey = () => Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 6);
 export const bytes = (n) => (!n ? '' : n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : n > 1024 ? `${Math.round(n / 1024)} KB` : `${n} B`);
