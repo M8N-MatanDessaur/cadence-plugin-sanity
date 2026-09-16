@@ -453,6 +453,34 @@ module.exports = function ({ addRoute, addPrefixRoute, json, readBody, shell }) 
     requestProject = (url.searchParams.get('project') || url.searchParams.get('repo')) ? { name: url.searchParams.get('project') || '', repo: url.searchParams.get('repo') || '' } : null;
 
     try {
+      // -- The @sanity handle's search --------------------------------------------
+      // "@sanity pricing page" in the palette, or an Ask Cadence question about something,
+      // arrives here and is answered in the shape every handle shares: a GROQ match on the
+      // words across every non-system type, drafts folded onto their published document.
+      if (subpath === '/search' && method === 'GET') {
+        const cfg = getPluginConfig();
+        if (!isConfigured(cfg)) return json(res, { items: [] });
+        const q = String(url.searchParams.get('q') || '').trim();
+        const limit = Math.max(1, Math.min(25, Number(url.searchParams.get('limit')) || 8));
+        if (!q) return json(res, { items: [] });
+        const words = q.split(/\s+/).filter(Boolean).map((w) => `${w.replace(/["*]/g, '')}*`);
+        // A title is often a localised object; the common locale keys are matched alongside the plain fields, and the type name too.
+        const match = words.map((w, i) => `(_type match $w${i} || title match $w${i} || title.en match $w${i} || title.fr match $w${i} || name match $w${i} || heading match $w${i} || headline match $w${i} || slug.current match $w${i} || _id == $q)`).join(' && ');
+        const params = { q };
+        words.forEach((w, i) => { params[`w${i}`] = w; });
+        const docs = await sanityQuery(cfg, `*[${SYSTEM} && ${match}][0...${limit * 3}]{_id, _type, _updatedAt, title, name, heading, headline, slug}`, params);
+        const found = result(docs);
+        const rows = groupVersions(Array.isArray(found) ? found : []);
+        const items = rows.slice(0, limit).map((r) => ({
+          kind: r.type, id: r.id,
+          label: r.title || r.id,
+          detail: [cfg.name, r.type, r.status].filter(Boolean).join(' - '),
+          open: { surface: 'sanity', target: { type: r.type, id: r.id, project: cfg.name } },
+          score: 0.7,
+        }));
+        return json(res, { items });
+      }
+
       // -- Config (legacy compat + active project info) -------------------------
       if (subpath === '/config' && method === 'GET') {
         const cfg = getPluginConfig();

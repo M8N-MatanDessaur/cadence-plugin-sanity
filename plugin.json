@@ -1,7 +1,7 @@
 {
   "id": "sanity",
   "name": "Sanity",
-  "version": "2.0.2",
+  "version": "2.1.0",
   "description": "Sanity.io as a screen: types, documents edited field by field from the repository schema, drafts and publishing, assets, insights, GROQ, the Studio code, and scripts for every CLI.",
   "icon": "database",
   "tint": "242, 77, 52",
@@ -529,7 +529,26 @@
           }
         ]
       }
-    ]
+    ],
+    "handle": {
+      "name": "sanity",
+      "aliases": [
+        "san",
+        "groq"
+      ],
+      "description": "Sanity: a document by id, or a search across every document type in the active project",
+      "placeholder": "words, a slug, or a document id",
+      "search": {
+        "route": "/search",
+        "minChars": 2
+      },
+      "fallback": {
+        "surface": "sanity",
+        "target": {
+          "query": "{text}"
+        }
+      }
+    }
   },
   "sdkVersion": 3
 }
