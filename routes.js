@@ -267,6 +267,39 @@ function groupVersions(docs) {
   return rows;
 }
 
+/**
+ * List items whose _type the list does not allow: the studio's "Item of type
+ * X not valid for this list". The schema was written for one member type
+ * (siteImage, itemsItem) and the content was seeded as another (image, item).
+ * Walks objects and list members by the fields the code declares.
+ */
+function memberTypeOf(m) { return m.name || m.objectType || m.type; }
+function collectInvalidItems(value, fields, out, pathStr, depth, objects) {
+  if (!value || typeof value !== 'object' || depth > 6 || !Array.isArray(fields)) return;
+  const fieldsOfType = (typeName) => { const o = objects && objects[typeName]; return o && o.fields ? schemaParser.resolveType(o, objects).fields : null; };
+  for (const f of fields) {
+    const v = value[f.name];
+    if (v === undefined || v === null) continue;
+    const at = pathStr ? `${pathStr}.${f.name}` : f.name;
+    if (f.type === 'array' && Array.isArray(v)) {
+      const members = (f.of || []).filter((m) => m && m.type !== 'string' && m.type !== 'number' && m.type !== 'boolean' && m.type !== 'url');
+      const allowed = members.map(memberTypeOf).filter(Boolean);
+      // A list whose members the parser could not read (a spread, a helper) allows any object type; its items are still walked by their own type.
+      const open = !f.of || !f.of.length || f.anyObject;
+      v.forEach((item, i) => {
+        if (!item || typeof item !== 'object' || !item._type) return;
+        if (!open && allowed.length && !allowed.includes(item._type)) { out.push({ path: `${at}[${i}]`, found: item._type, allowed, key: item._key || null, fixTo: allowed.length === 1 ? allowed[0] : null }); return; }
+        const m = members.find((x) => memberTypeOf(x) === item._type);
+        const inner = (m && m.fields) || fieldsOfType(item._type);
+        if (inner) collectInvalidItems(item, inner, out, `${at}[${i}]`, depth + 1, objects);
+      });
+    } else if (typeof v === 'object' && !Array.isArray(v)) {
+      const inner = f.fields || (v._type ? fieldsOfType(v._type) : null);
+      if (inner) collectInvalidItems(v, inner, out, at, depth + 1, objects);
+    }
+  }
+}
+
 function collectRefs(obj, out, pathStr) {
   if (!obj || typeof obj !== 'object') return;
   if (obj._ref) { out.push({ ref: obj._ref, path: pathStr }); return; }
@@ -1121,9 +1154,11 @@ module.exports = function ({ addRoute, addPrefixRoute, json, readBody, shell }) 
         const docs = await fetchAll(cfg, SYSTEM, '', 2500);
         const repo = readRepoSchema(cfg, false);
         const requiredByType = {};
+        const fieldsByType = {};
         const slugTypes = new Set();
         for (const d of repo.documents) {
           requiredByType[d.name] = (d.fields || []).filter((f) => f.required && !f.hidden).map((f) => f.name);
+          fieldsByType[d.name] = schemaParser.resolveType(d, repo.objects).fields;
           if ((d.fields || []).some((f) => f.type === 'slug')) slugTypes.add(d.name);
         }
         // Types whose documents mostly carry a slug are page-like even without a schema.
@@ -1145,7 +1180,7 @@ module.exports = function ({ addRoute, addPrefixRoute, json, readBody, shell }) 
         const staleAt = Date.now() - STALE_DAYS * 86400000;
         const slugSeen = {};
         const entries = [];
-        const counts = { total: rows.length, draft: 0, changed: 0, stale: 0, missingTitle: 0, missingSlug: 0, duplicateSlug: 0, missingAlt: 0, imagesMissingAlt: 0, brokenRef: 0, missingRequired: 0 };
+        const counts = { total: rows.length, draft: 0, changed: 0, stale: 0, missingTitle: 0, missingSlug: 0, duplicateSlug: 0, missingAlt: 0, imagesMissingAlt: 0, brokenRef: 0, missingRequired: 0, invalidItem: 0, invalidItems: 0 };
         for (const row of rows) {
           const doc = byId.get(draftId(row.id)) || byId.get(row.id);
           const issues = [];
@@ -1166,6 +1201,8 @@ module.exports = function ({ addRoute, addPrefixRoute, json, readBody, shell }) 
           const req = requiredByType[doc._type] || [];
           const missing = req.filter((f) => doc[f] === undefined || doc[f] === null || doc[f] === '' || (Array.isArray(doc[f]) && !doc[f].length) || (doc[f] && typeof doc[f] === 'object' && !Array.isArray(doc[f]) && doc[f]._type === 'slug' && !doc[f].current));
           if (missing.length) { issues.push(...missing.map((f) => `missing-required:${f}`)); counts.missingRequired++; }
+          const invalid = []; if (fieldsByType[doc._type]) collectInvalidItems(doc, fieldsByType[doc._type], invalid, '', 0, repo.objects);
+          if (invalid.length) { issues.push('invalid-item'); counts.invalidItem++; counts.invalidItems += invalid.length; detail.invalidItems = invalid.slice(0, 40); }
           entries.push({ id: row.id, type: doc._type, title: titleOf(doc), slug, status: row.status, updatedAt: row.updatedAt, issues, ...detail });
         }
         const types = Object.entries(typeCount).map(([name, count]) => ({ name, count })).sort((a, b) => a.name.localeCompare(b.name));

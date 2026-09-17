@@ -25,8 +25,9 @@ const KINDS = [
   ['missing-alt', 'Images without alt text', 'accessibility and SEO'],
   ['broken-ref', 'Broken references', 'points at a document that no longer exists'],
   ['missing-required', 'Empty required fields', 'the schema says they must be set'],
+  ['invalid-item', 'List items of the wrong type', 'the studio shows "Item of type X not valid for this list"; the content was seeded as one type, the schema names another'],
 ];
-const SHORT = { changed: 'Changes', draft: 'Unpublished', stale: 'Stale', 'missing-title': 'No title', 'missing-slug': 'No slug', 'duplicate-slug': 'Same slug', 'missing-alt': 'Alt text', 'broken-ref': 'Broken refs', 'missing-required': 'Required' };
+const SHORT = { changed: 'Changes', draft: 'Unpublished', stale: 'Stale', 'missing-title': 'No title', 'missing-slug': 'No slug', 'duplicate-slug': 'Same slug', 'missing-alt': 'Alt text', 'broken-ref': 'Broken refs', 'missing-required': 'Required', 'invalid-item': 'Wrong item type' };
 const has = (e, k) => (k === 'missing-required' ? e.issues.some((i) => i.startsWith('missing-required:')) : e.issues.includes(k));
 const label = (i) => i.replace('missing-required:', 'empty ');
 

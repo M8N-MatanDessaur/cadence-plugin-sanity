@@ -37,12 +37,18 @@ export function Overview({ host, health, insights, q, onOpenDoc, onOpenType, onA
   const types = (data ? data.types || [] : []).filter((t) => !q || t.name.toLowerCase().includes(q) || (t.title || '').toLowerCase().includes(q));
   const issues = data ? data.issues || [] : [];
   const c = insights.data ? insights.data.counts : null;
-  const toLook = c ? c.changed + c.stale + c.missingTitle + c.missingSlug + c.duplicateSlug + c.missingAlt + c.brokenRef + c.missingRequired : 0;
+  const toLook = c ? c.changed + c.stale + c.missingTitle + c.missingSlug + c.duplicateSlug + c.missingAlt + c.brokenRef + c.missingRequired + (c.invalidItem || 0) : 0;
+  // The documents that are actually broken (not merely unpublished or old), worst first, so the home page says where the problems are.
+  const SERIOUS = ['invalid-item', 'broken-ref', 'duplicate-slug', 'missing-slug', 'missing-title'];
+  const serious = (e) => e.issues.filter((i) => SERIOUS.includes(i) || i.startsWith('missing-required:'));
+  const broken = insights.data ? (insights.data.entries || []).filter((e) => serious(e).length).sort((a, b) => serious(b).length - serious(a).length) : [];
+  const describe = (e) => serious(e).map((i) => i === 'invalid-item' ? `${e.invalidItems ? e.invalidItems.length : ''} list item${e.invalidItems && e.invalidItems.length === 1 ? '' : 's'} of the wrong type${e.invalidItems && e.invalidItems[0] ? ` (${e.invalidItems[0].found} in a list of ${e.invalidItems[0].allowed.join('/')}, at ${e.invalidItems[0].path})` : ''}` : i === 'broken-ref' ? 'a broken reference' : i === 'duplicate-slug' ? 'a slug another document uses' : i === 'missing-slug' ? 'no slug' : i === 'missing-title' ? 'no title' : `empty required field ${i.slice('missing-required:'.length)}`).join('; ');
   return h('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sy-s3)' } },
     h('div', { className: 'mstats mstats--head' },
       Stat(host, { label: 'Documents', value: loading ? '...' : data.totalDocuments, tone: 'brass', hint: loading ? undefined : `in ${data.totalTypes} type${data.totalTypes === 1 ? '' : 's'}` }),
       Stat(host, { label: 'Unpublished', value: loading ? '...' : data.draftsCount, tone: data && data.draftsCount ? 'brass' : 'muted', hint: loading ? undefined : `${data.totalDrafts} new, ${data.totalChanged} changed` }),
-      Stat(host, { label: 'To look at', value: !c ? '...' : toLook, tone: toLook ? 'rosin' : 'muted', hint: c ? `${c.stale} stale, ${c.missingAlt} without alt` : 'reading the documents...' }),
+      Stat(host, { label: 'Broken', value: !c ? '...' : broken.length, tone: broken.length ? 'rosin' : 'moss', hint: !c ? 'reading the documents...' : broken.length ? `document${broken.length === 1 ? '' : 's'} the studio flags in red` : 'every document matches the schema' }),
+      Stat(host, { label: 'To look at', value: !c ? '...' : toLook, tone: toLook ? 'brass' : 'muted', hint: c ? `${c.stale} stale, ${c.missingAlt} without alt` : 'reading the documents...' }),
       Stat(host, { label: 'Site', value: !data || !data.previewUrl ? 'none' : preview === null ? '...' : preview.ok ? 'up' : 'down', tone: preview && preview.ok ? 'moss' : preview ? 'rosin' : 'muted', hint: data && data.previewUrl ? data.previewUrl.replace(/^https?:\/\//, '') : 'no environment URL' })),
     h('div', { className: 'mhealth' },
       Health(host, { label: 'project', value: loading ? '...' : data.projectId }),
@@ -59,6 +65,8 @@ export function Overview({ host, health, insights, q, onOpenDoc, onOpenType, onA
         h(ui.Button, { className: 'sy-btn--sm', onClick: () => onAction('groq') }, 'Run a GROQ query'),
         h(ui.Button, { className: 'sy-btn--sm', onClick: () => onAction('studio') }, 'The schema code'),
         h(ui.Button, { className: 'sy-btn--sm', onClick: () => onAction('ask') }, 'Ask the AI about the content'))) : null,
+    broken.length ? Panel(host, { title: 'Broken documents', wide: true, action: meta(`${broken.length}, worst first; click one to open it`) },
+      List(host, broken.slice(0, 24).map((e) => ListRow(host, { key: e.id, lead: h('span', { className: 'mind-dot', style: { background: 'var(--sy-rosin)' } }), label: `${e.title || e.id}`, sub: describe(e), meta: e.type, onClick: onOpenDoc ? () => onOpenDoc({ type: e.type, id: e.id }) : undefined })))) : null,
     issues.length ? Panel(host, { title: 'Needs attention', wide: true, action: meta(`${issues.length}`) },
       List(host, issues.map((i, k) => ListRow(host, { key: k, lead: h('span', { className: 'mind-dot', style: { background: i.level === 'warn' ? 'var(--sy-brass)' : 'var(--sy-text-3)' } }), label: i.message, sub: i.issue === 'draft' || i.issue === 'changed' ? 'Content > unpublished' : i.issue === 'stale' ? 'Insights > stale' : i.issue === 'empty' ? 'Content: a type with nothing in it yet' : i.issue === 'orphan' ? 'Studio: documents whose type the code no longer declares' : 'Content' })))) : null,
     h('div', { className: 'san-row2' },
